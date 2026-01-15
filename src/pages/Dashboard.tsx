@@ -1,10 +1,13 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Calendar, DollarSign, Activity, TrendingUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const StatCard = ({ title, value, description, icon: Icon, trend, trendUp }: any) => (
   <Card>
@@ -18,13 +21,15 @@ const StatCard = ({ title, value, description, icon: Icon, trend, trendUp }: any
     </CardHeader>
     <CardContent>
       <div className="text-2xl font-bold text-slate-900">{value}</div>
-      <div className="flex items-center mt-1">
-        <span className={`text-xs ${trendUp ? 'text-emerald-600' : 'text-red-600'} flex items-center font-medium`}>
-          {trendUp ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingUp className="h-3 w-3 mr-1 rotate-180" />}
-          {trend}
-        </span>
-        <span className="text-xs text-slate-500 ml-1">vs mes anterior</span>
-      </div>
+      {trend && (
+        <div className="flex items-center mt-1">
+          <span className={`text-xs ${trendUp ? 'text-emerald-600' : 'text-red-600'} flex items-center font-medium`}>
+            {trendUp ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingUp className="h-3 w-3 mr-1 rotate-180" />}
+            {trend}
+          </span>
+          <span className="text-xs text-slate-500 ml-1">vs mes anterior</span>
+        </div>
+      )}
     </CardContent>
   </Card>
 );
@@ -41,21 +46,74 @@ const AppointmentItem = ({ time, patient, treatment, status }: any) => (
       </div>
     </div>
     <div className={`px-3 py-1 rounded-full text-xs font-medium 
-      ${status === 'Confirmada' ? 'bg-emerald-100 text-emerald-700' : 
-        status === 'En Sala' ? 'bg-blue-100 text-blue-700' : 
-        status === 'Pendiente' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
-      {status}
+      ${status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 
+        status === 'in-progress' ? 'bg-blue-100 text-blue-700' : 
+        status === 'scheduled' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+      {status === 'confirmed' ? 'Confirmada' : 
+       status === 'in-progress' ? 'En Sala' : 
+       status === 'scheduled' ? 'Agendada' : status}
     </div>
   </div>
 );
 
 const Dashboard = () => {
+  const [stats, setStats] = useState({
+    patientsCount: 0,
+    appointmentsToday: 0,
+    activeTreatments: 0
+  });
+  const [todaysAppointments, setTodaysAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch Patients Count
+        const { count: patientsCount } = await supabase
+          .from('patients')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+
+        // Fetch Today's Appointments
+        const today = new Date();
+        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+        const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+        const { data: appointments, count: appointmentsCount } = await supabase
+          .from('appointments')
+          .select('*, patients(first_name, last_name)')
+          .eq('user_id', user.id)
+          .gte('start_time', startOfDay)
+          .lte('start_time', endOfDay)
+          .order('start_time', { ascending: true });
+
+        // Update state
+        setStats({
+          patientsCount: patientsCount || 0,
+          appointmentsToday: appointmentsCount || 0,
+          activeTreatments: 45 // Placeholder until treatments table exists
+        });
+
+        setTodaysAppointments(appointments || []);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   return (
     <MainLayout>
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-slate-500 mt-1">Bienvenido de nuevo, Dr. Pérez. Aquí está el resumen de hoy.</p>
+          <p className="text-slate-500 mt-1">Resumen general de tu clínica</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="gap-2">
@@ -73,31 +131,31 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard 
           title="Ingresos del Mes" 
-          value="$128,450.00" 
+          value="$0.00" 
           icon={DollarSign} 
-          trend="+12.5%" 
+          trend="+0%" 
           trendUp={true} 
         />
         <StatCard 
           title="Citas Hoy" 
-          value="14" 
+          value={stats.appointmentsToday} 
           icon={Calendar} 
-          trend="+4.3%" 
-          trendUp={true} 
+          // trend="+4.3%" 
+          // trendUp={true} 
         />
         <StatCard 
-          title="Pacientes Nuevos" 
-          value="28" 
+          title="Total Pacientes" 
+          value={stats.patientsCount} 
           icon={Users} 
-          trend="+8.1%" 
-          trendUp={true} 
+          // trend="+8.1%" 
+          // trendUp={true} 
         />
         <StatCard 
           title="Tratamientos Activos" 
-          value="45" 
+          value={stats.activeTreatments} 
           icon={Activity} 
-          trend="-2.4%" 
-          trendUp={false} 
+          // trend="-2.4%" 
+          // trendUp={false} 
         />
       </div>
 
@@ -112,11 +170,21 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="p-0">
             <div className="px-6 pb-4 space-y-1">
-              <AppointmentItem time="09:00 AM" patient="María González" treatment="Limpieza General" status="Finalizada" />
-              <AppointmentItem time="10:30 AM" patient="Carlos Rodríguez" treatment="Endodoncia (Sesión 1)" status="En Sala" />
-              <AppointmentItem time="11:45 AM" patient="Ana Martínez" treatment="Revisión Ortodoncia" status="Confirmada" />
-              <AppointmentItem time="02:00 PM" patient="Roberto Sánchez" treatment="Extracción Muela" status="Pendiente" />
-              <AppointmentItem time="03:30 PM" patient="Laura Díaz" treatment="Blanqueamiento" status="Pendiente" />
+              {loading ? (
+                <div className="text-center py-8 text-slate-400">Cargando citas...</div>
+              ) : todaysAppointments.length > 0 ? (
+                todaysAppointments.map((apt) => (
+                  <AppointmentItem 
+                    key={apt.id}
+                    time={format(new Date(apt.start_time), 'hh:mm a')} 
+                    patient={`${apt.patients?.first_name} ${apt.patients?.last_name}`} 
+                    treatment={apt.title} 
+                    status={apt.status} 
+                  />
+                ))
+              ) : (
+                <div className="text-center py-8 text-slate-400">No hay citas para hoy.</div>
+              )}
             </div>
           </CardContent>
         </Card>
