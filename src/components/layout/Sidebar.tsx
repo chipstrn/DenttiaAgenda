@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -13,9 +13,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -25,6 +28,18 @@ const Sidebar = () => {
     { icon: CreditCard, label: 'Finanzas / POS', path: '/finance' },
     { icon: Settings, label: 'Configuración', path: '/settings' },
   ];
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success('Sesión cerrada correctamente');
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast.error('Error al cerrar sesión');
+    }
+  };
 
   return (
     <div className="h-screen w-64 bg-slate-900 text-white flex flex-col shadow-xl fixed left-0 top-0">
@@ -58,7 +73,11 @@ const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <Button variant="ghost" className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-950/20">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-950/20"
+          onClick={handleLogout}
+        >
           <LogOut className="h-5 w-5" />
           Cerrar Sesión
         </Button>

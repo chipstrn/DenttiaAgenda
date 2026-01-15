@@ -1,17 +1,50 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { supabase } from '@/integrations/supabase/client';
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
 const MainLayout = ({ children }: MainLayoutProps) => {
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileData) {
+          setProfile(profileData);
+        }
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  const displayName = profile?.first_name && profile?.last_name 
+    ? `${profile.first_name} ${profile.last_name}`
+    : user?.email?.split('@')[0] || 'Usuario';
+
+  const initials = profile?.first_name && profile?.last_name
+    ? `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase()
+    : displayName.substring(0, 2).toUpperCase();
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
@@ -39,12 +72,12 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             
             <div className="flex items-center gap-3">
               <div className="text-right hidden md:block">
-                <p className="text-sm font-medium text-slate-900">Dr. Alejandro Pérez</p>
-                <p className="text-xs text-slate-500">Administrador</p>
+                <p className="text-sm font-medium text-slate-900">{displayName}</p>
+                <p className="text-xs text-slate-500">{profile?.role || 'Doctor'}</p>
               </div>
               <Avatar className="h-9 w-9 border border-slate-200 cursor-pointer">
-                <AvatarImage src="https://github.com/shadcn.png" />
-                <AvatarFallback>DR</AvatarFallback>
+                <AvatarImage src={profile?.avatar_url} />
+                <AvatarFallback className="bg-blue-100 text-blue-700">{initials}</AvatarFallback>
               </Avatar>
             </div>
           </div>
