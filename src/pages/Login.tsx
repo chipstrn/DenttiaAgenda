@@ -5,11 +5,13 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Activity } from 'lucide-react';
+import { Activity, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const Login = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -19,9 +21,14 @@ const Login = () => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session) navigate('/');
+      if (event === 'SIGNED_IN' && session) {
+        navigate('/');
+      }
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -39,6 +46,14 @@ const Login = () => {
         </div>
         
         <div className="p-8 pt-6">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
           <Auth
             supabaseClient={supabase}
             providers={[]} 
@@ -71,9 +86,15 @@ const Login = () => {
           />
         </div>
       </div>
-      <p className="mt-8 text-center text-xs text-slate-400">
-        © 2024 Dental ERP System. Todos los derechos reservados.
-      </p>
+      
+      <div className="max-w-md mt-4 text-center">
+        <p className="text-xs text-slate-400">
+          Nota: Si te registras, asegúrate de que la confirmación de email esté desactivada en tu proyecto de Supabase si quieres acceso inmediato.
+        </p>
+        <p className="mt-2 text-xs text-slate-400">
+          © 2024 Dental ERP System. Todos los derechos reservados.
+        </p>
+      </div>
     </div>
   );
 };
