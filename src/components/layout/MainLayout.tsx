@@ -2,11 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -15,6 +14,7 @@ interface MainLayoutProps {
 const MainLayout = ({ children }: MainLayoutProps) => {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -35,6 +35,14 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     };
 
     fetchUserData();
+
+    // Scroll listener for glass effect
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const displayName = profile?.first_name && profile?.last_name 
@@ -46,46 +54,59 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     : displayName.substring(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-ios-gray-100">
       <Sidebar />
       
-      <div className="pl-64 flex flex-col min-h-screen">
-        {/* Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-          <div className="w-96">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+      <div className="pl-72 flex flex-col min-h-screen">
+        {/* Glass Header */}
+        <header className={cn(
+          "h-16 px-8 flex items-center justify-between sticky top-0 z-20 transition-all duration-300 ease-ios",
+          scrolled 
+            ? "glass border-b border-white/20 shadow-glass" 
+            : "bg-transparent"
+        )}>
+          {/* Search */}
+          <div className="w-80">
+            <div className="relative group">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ios-gray-400 transition-colors group-focus-within:text-ios-blue" />
               <Input 
-                placeholder="Buscar paciente, tratamiento o factura..." 
-                className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-blue-500"
+                placeholder="Buscar..." 
+                className="pl-10 h-10 bg-white/80 border-0 rounded-xl text-sm placeholder:text-ios-gray-400 focus-visible:ring-2 focus-visible:ring-ios-blue/30 focus-visible:bg-white transition-all duration-200 shadow-ios-sm"
               />
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5 text-slate-600" />
-              <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </Button>
+          {/* Right Actions */}
+          <div className="flex items-center gap-3">
+            {/* Quick Add Button */}
+            <button className="h-10 w-10 rounded-xl bg-ios-blue flex items-center justify-center shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback">
+              <Plus className="h-5 w-5 text-white" />
+            </button>
+
+            {/* Notifications */}
+            <button className="h-10 w-10 rounded-xl bg-white/80 flex items-center justify-center shadow-ios-sm hover:bg-white transition-all duration-200 touch-feedback relative">
+              <Bell className="h-5 w-5 text-ios-gray-600" />
+              <span className="absolute top-2 right-2 h-2 w-2 bg-ios-red rounded-full ring-2 ring-white"></span>
+            </button>
             
-            <div className="h-8 w-[1px] bg-slate-200 mx-2"></div>
-            
-            <div className="flex items-center gap-3">
+            {/* Profile */}
+            <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">
-                <p className="text-sm font-medium text-slate-900">{displayName}</p>
-                <p className="text-xs text-slate-500">{profile?.role || 'Doctor'}</p>
+                <p className="text-sm font-semibold text-ios-gray-900">{displayName}</p>
+                <p className="text-xs text-ios-gray-500 font-medium">{profile?.role || 'Doctor'}</p>
               </div>
-              <Avatar className="h-9 w-9 border border-slate-200 cursor-pointer">
-                <AvatarImage src={profile?.avatar_url} />
-                <AvatarFallback className="bg-blue-100 text-blue-700">{initials}</AvatarFallback>
-              </Avatar>
+              <button className="h-10 w-10 rounded-xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center text-white font-semibold text-sm shadow-ios-sm hover:shadow-ios transition-all duration-200 touch-feedback">
+                {initials}
+              </button>
             </div>
           </div>
         </header>
 
-        {/* Main Content Area */}
+        {/* Main Content */}
         <main className="flex-1 p-8 overflow-y-auto">
-          {children}
+          <div className="animate-fade-in">
+            {children}
+          </div>
         </main>
       </div>
     </div>

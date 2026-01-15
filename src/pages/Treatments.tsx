@@ -2,20 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -27,6 +20,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Search, Edit, Trash2, Activity, Clock, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface Treatment {
   id: string;
@@ -49,6 +43,18 @@ const categories = [
   'Prótesis',
   'Otro'
 ];
+
+const categoryColors: Record<string, string> = {
+  'Preventivo': 'bg-ios-green',
+  'Restaurativo': 'bg-ios-blue',
+  'Endodoncia': 'bg-ios-orange',
+  'Periodoncia': 'bg-ios-pink',
+  'Cirugía': 'bg-ios-red',
+  'Ortodoncia': 'bg-ios-purple',
+  'Estética': 'bg-ios-indigo',
+  'Prótesis': 'bg-ios-teal',
+  'Otro': 'bg-ios-gray-500',
+};
 
 const Treatments = () => {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
@@ -154,7 +160,7 @@ const Treatments = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este tratamiento?')) return;
+    if (!confirm('¿Eliminar este tratamiento?')) return;
     
     try {
       const { error } = await supabase
@@ -167,7 +173,7 @@ const Treatments = () => {
       fetchTreatments();
     } catch (error) {
       console.error('Error deleting treatment:', error);
-      toast.error('Error al eliminar tratamiento');
+      toast.error('Error al eliminar');
     }
   };
 
@@ -179,128 +185,39 @@ const Treatments = () => {
 
   return (
     <MainLayout>
-      <div className="mb-8 flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Tratamientos</h1>
-          <p className="text-slate-500 mt-1">Catálogo de servicios y procedimientos</p>
+          <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Tratamientos</h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">Catálogo de servicios</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingTreatment(null);
-            setFormData({
-              name: '',
-              description: '',
-              category: '',
-              base_price: '',
-              duration_minutes: '30',
-              is_active: true
-            });
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 gap-2">
-              <Plus className="h-4 w-4" />
-              Nuevo Tratamiento
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>{editingTreatment ? 'Editar Tratamiento' : 'Nuevo Tratamiento'}</DialogTitle>
-              <DialogDescription>
-                {editingTreatment ? 'Modifica los datos del tratamiento' : 'Agrega un nuevo servicio al catálogo'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nombre *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ej: Limpieza Dental Profunda"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">Categoría</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="base_price">Precio Base ($)</Label>
-                    <Input
-                      id="base_price"
-                      type="number"
-                      step="0.01"
-                      value={formData.base_price}
-                      onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duración (min)</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      value={formData.duration_minutes}
-                      onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  {editingTreatment ? 'Guardar Cambios' : 'Crear Tratamiento'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <button 
+          onClick={() => setIsDialogOpen(true)}
+          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-purple text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-purple/90 transition-all duration-200 touch-feedback"
+        >
+          <Plus className="h-5 w-5" />
+          Nuevo Tratamiento
+        </button>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-4 mb-6 animate-fade-in" style={{ animationDelay: '50ms' }}>
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-          <Input
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
+          <input
+            type="text"
             placeholder="Buscar tratamiento..."
-            className="pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border-0 text-base placeholder:text-ios-gray-400 focus:ring-2 focus:ring-ios-purple/30 focus:outline-none shadow-ios-sm transition-all duration-200"
           />
         </div>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] h-12 rounded-2xl bg-white border-0 shadow-ios-sm">
             <SelectValue placeholder="Categoría" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las categorías</SelectItem>
+          <SelectContent className="rounded-xl">
+            <SelectItem value="all">Todas</SelectItem>
             {categories.map((cat) => (
               <SelectItem key={cat} value={cat}>{cat}</SelectItem>
             ))}
@@ -310,58 +227,186 @@ const Treatments = () => {
 
       {/* Treatments Grid */}
       {loading ? (
-        <div className="text-center py-12 text-slate-400">Cargando tratamientos...</div>
+        <div className="flex items-center justify-center py-16">
+          <div className="h-8 w-8 border-3 border-ios-purple/30 border-t-ios-purple rounded-full animate-spin"></div>
+        </div>
       ) : filteredTreatments.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTreatments.map((treatment) => (
-            <Card key={treatment.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg">{treatment.name}</CardTitle>
-                    {treatment.category && (
-                      <Badge variant="secondary" className="mt-2">
-                        {treatment.category}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(treatment)}>
-                      <Edit className="h-4 w-4 text-slate-600" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(treatment.id)}>
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredTreatments.map((treatment, index) => (
+            <div 
+              key={treatment.id} 
+              className="ios-card p-5 animate-slide-up"
+              style={{ animationDelay: `${100 + index * 50}ms` }}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className={cn(
+                  "h-11 w-11 rounded-2xl flex items-center justify-center",
+                  categoryColors[treatment.category] || 'bg-ios-gray-500'
+                )}>
+                  <Activity className="h-5 w-5 text-white" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                {treatment.description && (
-                  <p className="text-sm text-slate-500 mb-4 line-clamp-2">{treatment.description}</p>
-                )}
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-1 text-slate-600">
-                    <Clock className="h-4 w-4" />
-                    {treatment.duration_minutes} min
-                  </div>
-                  <div className="flex items-center gap-1 font-semibold text-emerald-600">
-                    <DollarSign className="h-4 w-4" />
-                    {treatment.base_price?.toFixed(2) || '0.00'}
-                  </div>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => handleEdit(treatment)}
+                    className="h-9 w-9 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
+                  >
+                    <Edit className="h-4 w-4 text-ios-gray-600" />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(treatment.id)}
+                    className="h-9 w-9 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
+                  >
+                    <Trash2 className="h-4 w-4 text-ios-red" />
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              
+              <h3 className="font-bold text-ios-gray-900 mb-1">{treatment.name}</h3>
+              {treatment.category && (
+                <span className={cn(
+                  "inline-block px-2.5 py-1 rounded-lg text-xs font-semibold mb-3",
+                  `${categoryColors[treatment.category]}/15 text-ios-gray-700`
+                )}>
+                  {treatment.category}
+                </span>
+              )}
+              {treatment.description && (
+                <p className="text-sm text-ios-gray-500 mb-4 line-clamp-2">{treatment.description}</p>
+              )}
+              
+              <div className="flex items-center justify-between pt-3 border-t border-ios-gray-100">
+                <div className="flex items-center gap-1.5 text-ios-gray-500">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-sm font-medium">{treatment.duration_minutes} min</span>
+                </div>
+                <div className="flex items-center gap-1 text-ios-green font-bold">
+                  <DollarSign className="h-4 w-4" />
+                  <span>{treatment.base_price?.toFixed(2) || '0.00'}</span>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="text-center py-12">
-            <Activity className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500">No hay tratamientos registrados</p>
-            <p className="text-sm text-slate-400 mt-1">Comienza agregando servicios a tu catálogo</p>
-          </CardContent>
-        </Card>
+        <div className="ios-card text-center py-16 animate-fade-in">
+          <div className="h-20 w-20 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
+            <Activity className="h-10 w-10 text-ios-gray-400" />
+          </div>
+          <p className="text-ios-gray-900 font-semibold">Sin tratamientos</p>
+          <p className="text-ios-gray-500 text-sm mt-1">Agrega servicios a tu catálogo</p>
+          <button 
+            onClick={() => setIsDialogOpen(true)}
+            className="mt-4 text-ios-purple font-semibold text-sm hover:opacity-70 transition-opacity"
+          >
+            Agregar tratamiento
+          </button>
+        </div>
       )}
+
+      {/* Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setEditingTreatment(null);
+          setFormData({
+            name: '',
+            description: '',
+            category: '',
+            base_price: '',
+            duration_minutes: '30',
+            is_active: true
+          });
+        }
+      }}>
+        <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle className="text-xl font-bold text-ios-gray-900">
+              {editingTreatment ? 'Editar Tratamiento' : 'Nuevo Tratamiento'}
+            </DialogTitle>
+            <DialogDescription className="text-ios-gray-500">
+              {editingTreatment ? 'Modifica los datos' : 'Agrega un nuevo servicio'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
+                <input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ej: Limpieza Dental"
+                  required
+                  className="ios-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Categoría</Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData({ ...formData, category: value })}
+                >
+                  <SelectTrigger className="ios-input">
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Precio ($)</Label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.base_price}
+                    onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
+                    placeholder="0.00"
+                    className="ios-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Duración (min)</Label>
+                  <input
+                    type="number"
+                    value={formData.duration_minutes}
+                    onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
+                    className="ios-input"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Descripción</Label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="ios-input resize-none"
+                />
+              </div>
+            </div>
+            
+            <div className="p-6 pt-4 flex gap-3">
+              <button 
+                type="button" 
+                onClick={() => setIsDialogOpen(false)}
+                className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                className="flex-1 h-12 rounded-xl bg-ios-purple text-white font-semibold hover:bg-ios-purple/90 transition-colors touch-feedback"
+              >
+                {editingTreatment ? 'Guardar' : 'Crear'}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 };

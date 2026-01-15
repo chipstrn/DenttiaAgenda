@@ -2,15 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Bell, Shield, Palette, Save } from 'lucide-react';
+import {  User, Bell, Shield, ChevronRight, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
@@ -71,10 +68,10 @@ const Settings = () => {
         });
 
       if (error) throw error;
-      toast.success('Perfil actualizado correctamente');
+      toast.success('Perfil actualizado');
     } catch (error) {
       console.error('Error saving profile:', error);
-      toast.error('Error al guardar perfil');
+      toast.error('Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -83,128 +80,165 @@ const Settings = () => {
   if (loading) {
     return (
       <MainLayout>
-        <div className="text-center py-12 text-slate-400">Cargando configuración...</div>
+        <div className="flex items-center justify-center py-16">
+          <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+        </div>
       </MainLayout>
     );
   }
 
+  const SettingItem = ({ icon: Icon, title, subtitle, color, onClick, rightElement }: any) => (
+    <button 
+      onClick={onClick}
+      className="flex items-center gap-4 w-full p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios touch-feedback"
+    >
+      <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", color)}>
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+      <div className="flex-1 text-left">
+        <p className="font-semibold text-ios-gray-900">{title}</p>
+        {subtitle && <p className="text-sm text-ios-gray-500">{subtitle}</p>}
+      </div>
+      {rightElement || <ChevronRight className="h-5 w-5 text-ios-gray-300" />}
+    </button>
+  );
+
   return (
     <MainLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Configuración</h1>
-        <p className="text-slate-500 mt-1">Administra tu cuenta y preferencias del sistema</p>
+      {/* Header */}
+      <div className="mb-8 animate-fade-in">
+        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Configuración</h1>
+        <p className="text-ios-gray-500 mt-1 font-medium">Administra tu cuenta</p>
       </div>
 
-      <div className="grid gap-6 max-w-3xl">
-        {/* Profile Settings */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-blue-600" />
-              <CardTitle>Perfil de Usuario</CardTitle>
+      <div className="max-w-2xl space-y-6">
+        {/* Profile Section */}
+        <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '0ms' }}>
+          <div className="p-5 border-b border-ios-gray-100 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-ios-blue flex items-center justify-center">
+              <User className="h-5 w-5 text-white" />
             </div>
-            <CardDescription>Información básica de tu cuenta</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            <div>
+              <h2 className="font-bold text-ios-gray-900">Perfil</h2>
+              <p className="text-sm text-ios-gray-500">Información de tu cuenta</p>
+            </div>
+          </div>
+          
+          <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="first_name">Nombre</Label>
-                <Input
-                  id="first_name"
+                <Label className="text-sm font-medium text-ios-gray-600">Nombre</Label>
+                <input
                   value={profile.first_name}
                   onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
+                  className="ios-input"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last_name">Apellido</Label>
-                <Input
-                  id="last_name"
+                <Label className="text-sm font-medium text-ios-gray-600">Apellido</Label>
+                <input
                   value={profile.last_name}
                   onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
+                  className="ios-input"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
-              <Input
-                id="email"
+              <Label className="text-sm font-medium text-ios-gray-600">Correo Electrónico</Label>
+              <input
                 type="email"
                 value={profile.email}
                 disabled
-                className="bg-slate-50"
+                className="ios-input bg-ios-gray-100 text-ios-gray-500"
               />
-              <p className="text-xs text-slate-500">El correo no puede ser modificado</p>
+              <p className="text-xs text-ios-gray-400">El correo no puede ser modificado</p>
             </div>
-            <Button onClick={handleSaveProfile} disabled={saving} className="gap-2">
-              <Save className="h-4 w-4" />
+            <button 
+              onClick={handleSaveProfile} 
+              disabled={saving}
+              className="flex items-center justify-center gap-2 w-full h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
+            >
+              <Save className="h-5 w-5" />
               {saving ? 'Guardando...' : 'Guardar Cambios'}
-            </Button>
-          </CardContent>
-        </Card>
+            </button>
+          </div>
+        </div>
 
-        {/* Notification Settings */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-amber-600" />
-              <CardTitle>Notificaciones</CardTitle>
+        {/* Notifications Section */}
+        <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '50ms' }}>
+          <div className="p-5 border-b border-ios-gray-100 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-ios-orange flex items-center justify-center">
+              <Bell className="h-5 w-5 text-white" />
             </div>
-            <CardDescription>Configura cómo recibir alertas y recordatorios</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-ios-gray-900">Notificaciones</h2>
+              <p className="text-sm text-ios-gray-500">Configura tus alertas</p>
+            </div>
+          </div>
+          
+          <div className="divide-y divide-ios-gray-100">
+            <div className="flex items-center justify-between p-5">
               <div>
-                <p className="font-medium">Recordatorios por Email</p>
-                <p className="text-sm text-slate-500">Recibe recordatorios de citas próximas</p>
+                <p className="font-semibold text-ios-gray-900">Recordatorios por Email</p>
+                <p className="text-sm text-ios-gray-500">Recibe recordatorios de citas</p>
               </div>
               <Switch
                 checked={notifications.emailReminders}
                 onCheckedChange={(checked) => setNotifications({ ...notifications, emailReminders: checked })}
               />
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-5">
               <div>
-                <p className="font-medium">Alertas de Citas</p>
-                <p className="text-sm text-slate-500">Notificaciones cuando se agenda una cita</p>
+                <p className="font-semibold text-ios-gray-900">Alertas de Citas</p>
+                <p className="text-sm text-ios-gray-500">Notificaciones de nuevas citas</p>
               </div>
               <Switch
                 checked={notifications.appointmentAlerts}
                 onCheckedChange={(checked) => setNotifications({ ...notifications, appointmentAlerts: checked })}
               />
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-5">
               <div>
-                <p className="font-medium">Notificaciones de Pagos</p>
-                <p className="text-sm text-slate-500">Alertas cuando se registra un pago</p>
+                <p className="font-semibold text-ios-gray-900">Notificaciones de Pagos</p>
+                <p className="text-sm text-ios-gray-500">Alertas de pagos registrados</p>
               </div>
               <Switch
                 checked={notifications.paymentNotifications}
                 onCheckedChange={(checked) => setNotifications({ ...notifications, paymentNotifications: checked })}
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Security Settings */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-emerald-600" />
-              <CardTitle>Seguridad</CardTitle>
+        {/* Security Section */}
+        <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <div className="p-5 border-b border-ios-gray-100 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-ios-green flex items-center justify-center">
+              <Shield className="h-5 w-5 text-white" />
             </div>
-            <CardDescription>Opciones de seguridad de tu cuenta</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button variant="outline" className="w-full justify-start">
-              Cambiar Contraseña
-            </Button>
-            <Button variant="outline" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50">
-              Cerrar Todas las Sesiones
-            </Button>
-          </CardContent>
-        </Card>
+            <div>
+              <h2 className="font-bold text-ios-gray-900">Seguridad</h2>
+              <p className="text-sm text-ios-gray-500">Opciones de seguridad</p>
+            </div>
+          </div>
+          
+          <div className="divide-y divide-ios-gray-100">
+            <SettingItem 
+              icon={Shield}
+              title="Cambiar Contraseña"
+              color="bg-ios-gray-400"
+            />
+            <button className="flex items-center gap-4 w-full p-4 hover:bg-ios-red/5 transition-all duration-200 ease-ios touch-feedback">
+              <div className="h-10 w-10 rounded-xl bg-ios-red/15 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-ios-red" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-semibold text-ios-red">Cerrar Todas las Sesiones</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-ios-gray-300" />
+            </button>
+          </div>
+        </div>
       </div>
     </MainLayout>
   );

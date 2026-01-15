@@ -9,10 +9,10 @@ import {
   CreditCard, 
   Activity, 
   Settings, 
-  LogOut 
+  LogOut,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -21,19 +21,19 @@ const Sidebar = () => {
   const navigate = useNavigate();
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: Calendar, label: 'Agenda', path: '/agenda' },
-    { icon: Users, label: 'Pacientes', path: '/patients' },
-    { icon: Activity, label: 'Tratamientos', path: '/treatments' },
-    { icon: CreditCard, label: 'Finanzas / POS', path: '/finance' },
-    { icon: Settings, label: 'Configuración', path: '/settings' },
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/', color: 'bg-ios-blue' },
+    { icon: Calendar, label: 'Agenda', path: '/agenda', color: 'bg-ios-orange' },
+    { icon: Users, label: 'Pacientes', path: '/patients', color: 'bg-ios-green' },
+    { icon: Activity, label: 'Tratamientos', path: '/treatments', color: 'bg-ios-purple' },
+    { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-teal' },
+    { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
   ];
 
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      toast.success('Sesión cerrada correctamente');
+      toast.success('Sesión cerrada');
       navigate('/login');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -42,45 +42,78 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="h-screen w-64 bg-slate-900 text-white flex flex-col shadow-xl fixed left-0 top-0">
-      <div className="p-6 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <Activity className="h-8 w-8 text-blue-400" />
-          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
-            Dental ERP
-          </h1>
+    <div className="h-screen w-72 bg-ios-gray-50 flex flex-col fixed left-0 top-0 border-r border-ios-gray-200/50">
+      {/* Logo */}
+      <div className="p-6 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center shadow-ios-sm">
+            <Activity className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-ios-gray-900 tracking-tight">
+              Dental ERP
+            </h1>
+            <p className="text-xs text-ios-gray-500 font-medium">Gestión Clínica</p>
+          </div>
         </div>
-        <p className="text-xs text-slate-400 mt-1">Gestión Clínica Inteligente</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-        {menuItems.map((item) => (
-          <Link to={item.path} key={item.path}>
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full justify-start gap-3 mb-1 font-medium transition-all duration-200",
-                location.pathname === item.path 
-                  ? "bg-slate-800 text-blue-400 shadow-sm border-l-4 border-blue-400 rounded-l-none" 
-                  : "text-slate-300 hover:text-white hover:bg-slate-800/50"
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              {item.label}
-            </Button>
-          </Link>
-        ))}
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-2 overflow-y-auto">
+        <div className="space-y-1">
+          {menuItems.map((item, index) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link 
+                to={item.path} 
+                key={item.path}
+                className="block"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-ios group touch-feedback",
+                    isActive 
+                      ? "bg-white shadow-ios-sm" 
+                      : "hover:bg-white/60"
+                  )}
+                >
+                  <div className={cn(
+                    "h-8 w-8 rounded-lg flex items-center justify-center transition-transform duration-200",
+                    item.color,
+                    isActive ? "scale-100" : "scale-95 group-hover:scale-100"
+                  )}>
+                    <item.icon className="h-4 w-4 text-white" />
+                  </div>
+                  <span className={cn(
+                    "flex-1 text-sm font-medium transition-colors duration-200",
+                    isActive ? "text-ios-gray-900" : "text-ios-gray-600 group-hover:text-ios-gray-900"
+                  )}>
+                    {item.label}
+                  </span>
+                  {isActive && (
+                    <ChevronRight className="h-4 w-4 text-ios-gray-400" />
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-950/20"
+      {/* Logout */}
+      <div className="p-3 border-t border-ios-gray-200/50">
+        <button 
           onClick={handleLogout}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 ease-ios hover:bg-ios-red/10 touch-feedback group"
         >
-          <LogOut className="h-5 w-5" />
-          Cerrar Sesión
-        </Button>
+          <div className="h-8 w-8 rounded-lg bg-ios-red/15 flex items-center justify-center group-hover:bg-ios-red/20 transition-colors">
+            <LogOut className="h-4 w-4 text-ios-red" />
+          </div>
+          <span className="text-sm font-medium text-ios-red">
+            Cerrar Sesión
+          </span>
+        </button>
       </div>
     </div>
   );

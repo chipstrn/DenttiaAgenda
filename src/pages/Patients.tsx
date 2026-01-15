@@ -2,8 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,20 +12,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Edit, Trash2, User, Phone, Mail, Calendar } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, User, Phone, Mail, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface Patient {
   id: string;
@@ -95,14 +85,14 @@ const Patients = () => {
           .eq('id', editingPatient.id);
 
         if (error) throw error;
-        toast.success('Paciente actualizado correctamente');
+        toast.success('Paciente actualizado');
       } else {
         const { error } = await supabase
           .from('patients')
           .insert({ ...formData, user_id: user.id });
 
         if (error) throw error;
-        toast.success('Paciente creado correctamente');
+        toast.success('Paciente creado');
       }
 
       setIsDialogOpen(false);
@@ -163,209 +153,224 @@ const Patients = () => {
 
   return (
     <MainLayout>
-      <div className="mb-8 flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Pacientes</h1>
-          <p className="text-slate-500 mt-1">Gestiona la información de tus pacientes</p>
+          <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Pacientes</h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">{patients.length} pacientes registrados</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingPatient(null);
-            setFormData({
-              first_name: '',
-              last_name: '',
-              email: '',
-              phone: '',
-              date_of_birth: '',
-              address: '',
-              medical_history: ''
-            });
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 gap-2">
-              <Plus className="h-4 w-4" />
-              Nuevo Paciente
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>{editingPatient ? 'Editar Paciente' : 'Nuevo Paciente'}</DialogTitle>
-              <DialogDescription>
-                {editingPatient ? 'Modifica los datos del paciente' : 'Ingresa los datos del nuevo paciente'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="first_name">Nombre *</Label>
-                    <Input
-                      id="first_name"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="last_name">Apellido *</Label>
-                    <Input
-                      id="last_name"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                      required
-                    />
+        <button 
+          onClick={() => setIsDialogOpen(true)}
+          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
+        >
+          <Plus className="h-5 w-5" />
+          Nuevo Paciente
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="mb-6 animate-fade-in" style={{ animationDelay: '50ms' }}>
+        <div className="relative max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar paciente..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border-0 text-base placeholder:text-ios-gray-400 focus:ring-2 focus:ring-ios-blue/30 focus:outline-none shadow-ios-sm transition-all duration-200"
+          />
+        </div>
+      </div>
+
+      {/* Patients List */}
+      <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '100ms' }}>
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+          </div>
+        ) : filteredPatients.length > 0 ? (
+          <div className="divide-y divide-ios-gray-100">
+            {filteredPatients.map((patient, index) => (
+              <div 
+                key={patient.id}
+                className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in"
+                style={{ animationDelay: `${150 + index * 30}ms` }}
+              >
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-semibold">
+                    {patient.first_name[0]}{patient.last_name[0]}
+                  </span>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-ios-gray-900">
+                    {patient.first_name} {patient.last_name}
+                  </p>
+                  <div className="flex items-center gap-4 mt-1">
+                    {patient.email && (
+                      <span className="flex items-center gap-1 text-sm text-ios-gray-500">
+                        <Mail className="h-3.5 w-3.5" />
+                        {patient.email}
+                      </span>
+                    )}
+                    {patient.phone && (
+                      <span className="flex items-center gap-1 text-sm text-ios-gray-500">
+                        <Phone className="h-3.5 w-3.5" />
+                        {patient.phone}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Teléfono</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    />
-                  </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleEdit(patient); }}
+                    className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
+                  >
+                    <Edit className="h-4 w-4 text-ios-gray-600" />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDelete(patient.id); }}
+                    className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
+                  >
+                    <Trash2 className="h-4 w-4 text-ios-red" />
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date_of_birth">Fecha de Nacimiento</Label>
-                    <Input
-                      id="date_of_birth"
-                      type="date"
-                      value={formData.date_of_birth}
-                      onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Dirección</Label>
-                    <Input
-                      id="address"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    />
-                  </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <div className="h-20 w-20 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
+              <User className="h-10 w-10 text-ios-gray-400" />
+            </div>
+            <p className="text-ios-gray-900 font-semibold">No hay pacientes</p>
+            <p className="text-ios-gray-500 text-sm mt-1">Comienza agregando tu primer paciente</p>
+            <button 
+              onClick={() => setIsDialogOpen(true)}
+              className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
+            >
+              Agregar paciente
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setEditingPatient(null);
+          setFormData({
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+            date_of_birth: '',
+            address: '',
+            medical_history: ''
+          });
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle className="text-xl font-bold text-ios-gray-900">
+              {editingPatient ? 'Editar Paciente' : 'Nuevo Paciente'}
+            </DialogTitle>
+            <DialogDescription className="text-ios-gray-500">
+              {editingPatient ? 'Modifica los datos del paciente' : 'Ingresa los datos del nuevo paciente'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
+                  <input
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    required
+                    className="ios-input"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="medical_history">Historial Médico</Label>
-                  <Textarea
-                    id="medical_history"
-                    value={formData.medical_history}
-                    onChange={(e) => setFormData({ ...formData, medical_history: e.target.value })}
-                    rows={3}
+                  <Label className="text-sm font-medium text-ios-gray-600">Apellido *</Label>
+                  <input
+                    value={formData.last_name}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    required
+                    className="ios-input"
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  {editingPatient ? 'Guardar Cambios' : 'Crear Paciente'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Lista de Pacientes ({filteredPatients.length})</CardTitle>
-            <div className="relative w-72">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Buscar paciente..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Email</Label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="ios-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
+                  <input
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="ios-input"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Fecha de Nacimiento</Label>
+                  <input
+                    type="date"
+                    value={formData.date_of_birth}
+                    onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+                    className="ios-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Dirección</Label>
+                  <input
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="ios-input"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Historial Médico</Label>
+                <textarea
+                  value={formData.medical_history}
+                  onChange={(e) => setFormData({ ...formData, medical_history: e.target.value })}
+                  rows={3}
+                  className="ios-input resize-none"
+                />
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8 text-slate-400">Cargando pacientes...</div>
-          ) : filteredPatients.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Paciente</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Fecha Nac.</TableHead>
-                  <TableHead>Registro</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPatients.map((patient) => (
-                  <TableRow key={patient.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{patient.first_name} {patient.last_name}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {patient.email && (
-                          <div className="flex items-center gap-1 text-sm text-slate-600">
-                            <Mail className="h-3 w-3" />
-                            {patient.email}
-                          </div>
-                        )}
-                        {patient.phone && (
-                          <div className="flex items-center gap-1 text-sm text-slate-600">
-                            <Phone className="h-3 w-3" />
-                            {patient.phone}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {patient.date_of_birth ? format(new Date(patient.date_of_birth), 'dd/MM/yyyy') : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {format(new Date(patient.created_at), 'dd/MM/yyyy')}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(patient)}>
-                          <Edit className="h-4 w-4 text-slate-600" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(patient.id)}>
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-12">
-              <User className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500">No hay pacientes registrados</p>
-              <p className="text-sm text-slate-400 mt-1">Comienza agregando tu primer paciente</p>
+            
+            <div className="p-6 pt-4 flex gap-3">
+              <button 
+                type="button" 
+                onClick={() => setIsDialogOpen(false)}
+                className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback"
+              >
+                {editingPatient ? 'Guardar' : 'Crear'}
+              </button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </form>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 };
