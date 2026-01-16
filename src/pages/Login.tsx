@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { Auth } from '@supabase/auth-ui-react';
+import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { toast } from 'sonner';
+import { Activity } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState<any>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -33,76 +29,6 @@ const Login = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Credenciales incorrectas');
-        } else if (error.message.includes('Email not confirmed')) {
-          toast.error('Email no confirmado. Contacta al administrador.');
-        } else {
-          toast.error(error.message);
-        }
-        return;
-      }
-
-      // Verificar si el usuario está activo
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_active')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profile && !profile.is_active) {
-          await supabase.auth.signOut();
-          toast.error('Tu cuenta ha sido desactivada. Contacta al administrador.');
-          return;
-        }
-      }
-
-      toast.success('¡Bienvenido!');
-    } catch (error: any) {
-      console.error('Login error:', error);
-      toast.error('Error al iniciar sesión');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-      toast.error('Ingresa tu correo electrónico');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`
-      });
-
-      if (error) throw error;
-
-      toast.success('Se ha enviado un enlace de recuperación a tu correo');
-      setShowForgotPassword(false);
-    } catch (error: any) {
-      console.error('Reset password error:', error);
-      toast.error('Error al enviar el correo de recuperación');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-ios-gray-100 flex flex-col items-center justify-center p-6">
       {/* Background Gradient */}
@@ -114,119 +40,112 @@ const Login = () => {
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-3xl bg-gradient-to-br from-ios-blue to-ios-indigo shadow-ios-lg mb-4">
             <Activity className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Denttia</h1>
-          <p className="text-ios-gray-500 mt-1 font-medium">ERP Dental Profesional</p>
+          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Dental ERP</h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">Gestión Clínica Inteligente</p>
         </div>
         
         {/* Auth Card */}
         <div className="ios-card p-6 shadow-ios-lg">
-          {showForgotPassword ? (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="text-center mb-4">
-                <h2 className="text-lg font-semibold text-ios-gray-900">Recuperar Contraseña</h2>
-                <p className="text-sm text-ios-gray-500 mt-1">
-                  Ingresa tu correo y te enviaremos un enlace
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-ios-gray-600">Correo Electrónico</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="ios-input pl-10"
-                    placeholder="tu@email.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Enviando...' : 'Enviar Enlace'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowForgotPassword(false)}
-                className="w-full text-sm text-ios-blue font-medium hover:underline"
-              >
-                Volver al inicio de sesión
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-ios-gray-600">Correo Electrónico</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="ios-input pl-10"
-                    placeholder="tu@email.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-ios-gray-600">Contraseña</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="ios-input pl-10 pr-10"
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ios-gray-400 hover:text-ios-gray-600"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-ios-blue font-medium hover:underline"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-              </button>
-            </form>
-          )}
+          <Auth
+            supabaseClient={supabase}
+            providers={[]} 
+            appearance={{
+              theme: ThemeSupa,
+              style: {
+                button: {
+                  borderRadius: '12px',
+                  height: '48px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  background: 'hsl(211, 100%, 50%)',
+                  border: 'none',
+                },
+                input: {
+                  borderRadius: '12px',
+                  height: '48px',
+                  fontSize: '15px',
+                  background: 'hsl(0, 0%, 96%)',
+                  border: 'none',
+                  padding: '0 16px',
+                },
+                label: {
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: 'hsl(0, 0%, 45%)',
+                  marginBottom: '6px',
+                },
+                anchor: {
+                  color: 'hsl(211, 100%, 50%)',
+                  fontWeight: '500',
+                  fontSize: '14px',
+                },
+                message: {
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                },
+                container: {
+                  gap: '16px',
+                },
+              },
+              variables: {
+                default: {
+                  colors: {
+                    brand: 'hsl(211, 100%, 50%)',
+                    brandAccent: 'hsl(211, 100%, 45%)',
+                    inputBackground: 'hsl(0, 0%, 96%)',
+                    inputBorder: 'transparent',
+                    inputBorderFocus: 'hsl(211, 100%, 50%)',
+                    inputBorderHover: 'transparent',
+                  },
+                  radii: {
+                    borderRadiusButton: '12px',
+                    buttonBorderRadius: '12px',
+                    inputBorderRadius: '12px',
+                  },
+                  fontSizes: {
+                    baseBodySize: '15px',
+                    baseInputSize: '15px',
+                    baseLabelSize: '14px',
+                    baseButtonSize: '15px',
+                  },
+                  fonts: {
+                    bodyFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                    buttonFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                    inputFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                    labelFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                  },
+                },
+              },
+            }}
+            theme="light"
+            localization={{
+              variables: {
+                sign_in: {
+                  email_label: 'Correo Electrónico',
+                  password_label: 'Contraseña',
+                  button_label: 'Iniciar Sesión',
+                  link_text: '¿Ya tienes cuenta? Inicia sesión',
+                },
+                sign_up: {
+                  email_label: 'Correo Electrónico',
+                  password_label: 'Contraseña',
+                  button_label: 'Crear Cuenta',
+                  link_text: '¿No tienes cuenta? Regístrate',
+                },
+                forgotten_password: {
+                  email_label: 'Correo Electrónico',
+                  button_label: 'Enviar instrucciones',
+                  link_text: '¿Olvidaste tu contraseña?',
+                },
+              }
+            }}
+          />
         </div>
-
+        
         {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-ios-gray-400 font-medium">
-            Sistema privado. Solo usuarios autorizados.
-          </p>
-          <p className="text-xs text-ios-gray-400 mt-1">
-            © 2024 Denttia. Todos los derechos reservados.
-          </p>
-        </div>
+        <p className="text-center text-xs text-ios-gray-400 mt-6 font-medium">
+          © 2024 Dental ERP. Todos los derechos reservados.
+        </p>
       </div>
     </div>
   );
