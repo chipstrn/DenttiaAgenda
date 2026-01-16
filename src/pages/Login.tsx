@@ -14,36 +14,23 @@ const Login = () => {
   const [password, setPassword] = useState('');
 
   useEffect(() => {
+    // Verificar si ya hay sesión activa
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        checkPasswordChangeRequired(session.user.id);
+        navigate('/');
       }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        await checkPasswordChangeRequired(session.user.id);
+        navigate('/');
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
-
-  const checkPasswordChangeRequired = async (userId: string) => {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('must_change_password')
-      .eq('id', userId)
-      .single();
-
-    if (profile?.must_change_password) {
-      navigate('/change-password');
-    } else {
-      navigate('/');
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,13 +43,6 @@ const Login = () => {
       });
 
       if (error) {
-        // Registrar intento fallido
-        await supabase.from('login_attempts').insert({
-          email,
-          success: false,
-          failure_reason: error.message,
-        });
-        
         if (error.message.includes('Invalid login credentials')) {
           toast.error('Credenciales incorrectas');
         } else {
@@ -71,17 +51,12 @@ const Login = () => {
         return;
       }
 
-      // Registrar intento exitoso
-      await supabase.from('login_attempts').insert({
-        email,
-        success: true,
-      });
-
-      // Actualizar último login
-      await supabase
+      // Actualizar último login (sin bloquear el flujo)
+      supabase
         .from('profiles')
         .update({ last_login: new Date().toISOString() })
-        .eq('id', data.user.id);
+        .eq('id', data.user.id)
+        .then(() => {});
 
       toast.success('Bienvenido');
     } catch (error: any) {

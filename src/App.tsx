@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
-import ChangePassword from "./pages/ChangePassword";
 import Patients from "./pages/Patients";
 import PatientIntake from "./pages/PatientIntake";
 import PatientAnamnesis from "./pages/PatientAnamnesis";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
@@ -14,7 +14,6 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const location = useLocation();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -25,7 +24,7 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
         if (session) {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('*, roles(name, permissions)')
+            .select('id, role, first_name, last_name')
             .eq('id', session.user.id)
             .single();
 
@@ -47,7 +46,7 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
       if (session) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('*, roles(name, permissions)')
+          .select('id, role, first_name, last_name')
           .eq('id', session.user.id)
           .single();
         setProfile(profileData);
@@ -75,11 +74,6 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar si debe cambiar contraseña (excepto en la página de cambio)
-  if (profile?.must_change_password && location.pathname !== '/change-password') {
-    return <Navigate to="/change-password" replace />;
-  }
-
   // Verificar roles si se especificaron
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = profile?.role || 'doctor';
@@ -103,7 +97,7 @@ export const useUserProfile = () => {
         if (user) {
           const { data } = await supabase
             .from('profiles')
-            .select('*, roles(name, permissions)')
+            .select('id, role, first_name, last_name')
             .eq('id', user.id)
             .single();
           setProfile(data);

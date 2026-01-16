@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import Odontogram, { CONDITION_LABELS } from '@/components/dental/Odontogram';
 import { Label } from '@/components/ui/label';
@@ -25,12 +25,11 @@ import {
   Plus,
   Trash2,
   DollarSign,
-  Printer,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 interface ToothData {
   id?: string;
@@ -65,13 +64,15 @@ const CONDITIONS = [
 ];
 
 const PatientExam = () => {
-  const navigate = useNavigate();
   const { patientId } = useParams();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [patientName, setPatientName] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
   const [teeth, setTeeth] = useState<Record<number, ToothData>>({});
+  const [modifiedTeeth, setModifiedTeeth] = useState<Set<number>>(new Set());
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
@@ -79,11 +80,9 @@ const PatientExam = () => {
   const [discount, setDiscount] = useState(0);
 
   // Form for selected tooth
-  const [toothForm, setToothForm] = useState({
-    condition: 'healthy',
-    notes: '',
-    treatment_id: ''
-  });
+  const [toothCondition, setToothCondition] = useState('healthy');
+  const [toothNotes, setToothNotes] = useState('');
+  const [toothTreatmentId, setToothTreatmentId] = useState('');
 
   useEffect(() => {
     if (patientId) {
@@ -91,20 +90,17 @@ const PatientExam = () => {
     }
   }, [patientId]);
 
+  // Update form when tooth selection changes
   useEffect(() => {
     if (selectedTooth && teeth[selectedTooth]) {
       const tooth = teeth[selectedTooth];
-      setToothForm({
-        condition: tooth.condition || 'healthy',
-        notes: tooth.notes || '',
-        treatment_id: tooth.treatment_id || ''
-      });
+      setToothCondition(tooth.condition || 'healthy');
+      setToothNotes(tooth.notes || '');
+      setToothTreatmentId(tooth.treatment_id || '');
     } else {
-      setToothForm({
-        condition: 'healthy',
-        notes: '',
-        treatment_id: ''
-      });
+      setToothCondition('healthy');
+      setToothNotes('');
+      setToothTreatmentId('');
     }
   }, [selectedTooth, teeth]);
 
@@ -113,39 +109,38 @@ const PatientExam = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserId(user.id);
 
-      // Fetch patient
-      const { data: patientData } = await supabase
-        .from('patients')
-        .select('first_name, last_name')
-        .eq('id', patientId)
-        .single();
+      // Fetch patient and odontogram in parallel
+      const [patientResult, odontogramResult, treatmentsResult] = await Promise.all([
+        supabase
+          .from('patients')
+          .select('first_name, last_name')
+          .eq('id', patientId)
+          .single(),
+        supabase
+          .from('odontograms')
+          .select('*')
+          .eq('patient_id', patientId),
+        supabase
+          .from('treatments')
+          .select('id, name, base_price, category')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .order('name')
+      ]);
 
-      if (patientData) {
-        setPatientName(`${patientData.first_name} ${patientData.last_name}`);
+      if (patientResult.data) {
+        setPatientName(`${patientResult.data.first_name} ${patientResult.data.last_name}`);
       }
 
-      // Fetch odontogram
-      const { data: odontogramData } = await supabase
-        .from('odontograms')
-        .select('*')
-        .eq('patient_id', patientId);
-
       const teethMap: Record<number, ToothData> = {};
-      odontogramData?.forEach(tooth => {
+      odontogramResult.data?.forEach(tooth => {
         teethMap[tooth.tooth_number] = tooth;
       });
       setTeeth(teethMap);
 
-      // Fetch treatments
-      const { data: treatmentsData } = await supabase
-        .from('treatments')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('name');
-
-      setTreatments(treatmentsData || []);
+      setTreatments(treatmentsResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -154,31 +149,53 @@ const PatientExam = () => {
     }
   };
 
-  const handleToothClick = (toothNumber: number) => {
+  const handleToothClick = useCallback((toothNumber: number) => {
     setSelectedTooth(toothNumber);
-  };
+  }, []);
 
+  // Update local tooth state without saving
+  const updateLocalTooth = useCallback(() => {
+    if (!selectedTooth) return;
+
+    setTeeth(prev => ({
+      ...prev,
+      [selectedTooth]: {
+        ...prev[selectedTooth],
+        tooth_number: selectedTooth,
+        condition: toothCondition,
+        notes: toothNotes,
+        treatment_id: toothTreatmentId || undefined,
+        surfaces: prev[selectedTooth]?.surfaces || {}
+      }
+    }));
+
+    // Mark as modified
+    setModifiedTeeth(prev => new Set(prev).add(selectedTooth));
+  }, [selectedTooth, toothCondition, toothNotes, toothTreatmentId]);
+
+  // Save single tooth
   const handleSaveTooth = async () => {
-    if (!selectedTooth || !patientId) return;
+    if (!selectedTooth || !patientId || !userId) return;
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const toothData = {
-        user_id: user.id,
+        user_id: userId,
         patient_id: patientId,
         tooth_number: selectedTooth,
-        condition: toothForm.condition,
-        notes: toothForm.notes,
-        treatment_id: toothForm.treatment_id || null,
+        condition: toothCondition,
+        notes: toothNotes,
+        treatment_id: toothTreatmentId || null,
+        surfaces: teeth[selectedTooth]?.surfaces || {},
         updated_at: new Date().toISOString()
       };
 
       const { error } = await supabase
         .from('odontograms')
-        .upsert(toothData, { onConflict: 'patient_id,tooth_number' });
+        .upsert(toothData, { 
+          onConflict: 'patient_id,tooth_number',
+          ignoreDuplicates: false 
+        });
 
       if (error) throw error;
 
@@ -188,12 +205,65 @@ const PatientExam = () => {
         [selectedTooth]: { ...prev[selectedTooth], ...toothData }
       }));
 
+      // Remove from modified set
+      setModifiedTeeth(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(selectedTooth);
+        return newSet;
+      });
+
       toast.success(`Diente ${selectedTooth} guardado`);
     } catch (error) {
       console.error('Error saving tooth:', error);
       toast.error('Error al guardar');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // BULK SAVE - Save all modified teeth in ONE transaction
+  const handleSaveAllTeeth = async () => {
+    if (!patientId || !userId || modifiedTeeth.size === 0) {
+      toast.info('No hay cambios pendientes');
+      return;
+    }
+
+    setSavingAll(true);
+    try {
+      // Prepare bulk payload
+      const bulkPayload = Array.from(modifiedTeeth).map(toothNumber => {
+        const tooth = teeth[toothNumber];
+        return {
+          user_id: userId,
+          patient_id: patientId,
+          tooth_number: toothNumber,
+          condition: tooth?.condition || 'healthy',
+          notes: tooth?.notes || null,
+          treatment_id: tooth?.treatment_id || null,
+          surfaces: tooth?.surfaces || {},
+          updated_at: new Date().toISOString()
+        };
+      });
+
+      // Single bulk upsert - ONE database call for all teeth
+      const { error } = await supabase
+        .from('odontograms')
+        .upsert(bulkPayload, { 
+          onConflict: 'patient_id,tooth_number',
+          ignoreDuplicates: false 
+        });
+
+      if (error) throw error;
+
+      // Clear modified set
+      setModifiedTeeth(new Set());
+
+      toast.success(`${bulkPayload.length} dientes guardados`);
+    } catch (error) {
+      console.error('Error bulk saving teeth:', error);
+      toast.error('Error al guardar odontograma');
+    } finally {
+      setSavingAll(false);
     }
   };
 
@@ -235,12 +305,10 @@ const PatientExam = () => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
       
-      // Recalculate total
       if (field === 'quantity' || field === 'unit_price') {
         updated[index].total = updated[index].quantity * updated[index].unit_price;
       }
       
-      // If treatment selected, auto-fill
       if (field === 'treatment_id') {
         const treatment = treatments.find(t => t.id === value);
         if (treatment) {
@@ -270,14 +338,11 @@ const PatientExam = () => {
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       // Create budget
       const { data: budget, error: budgetError } = await supabase
         .from('budgets')
         .insert({
-          user_id: user.id,
+          user_id: userId,
           patient_id: patientId,
           subtotal,
           discount_percent: discount,
@@ -285,12 +350,12 @@ const PatientExam = () => {
           total,
           status: 'pending'
         })
-        .select()
+        .select('id')
         .single();
 
       if (budgetError) throw budgetError;
 
-      // Create budget items
+      // Bulk insert budget items - ONE call
       const items = budgetItems.map(item => ({
         budget_id: budget.id,
         treatment_id: item.treatment_id || null,
@@ -322,7 +387,7 @@ const PatientExam = () => {
     return (
       <MainLayout>
         <div className="flex items-center justify-center py-16">
-          <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+          <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
         </div>
       </MainLayout>
     );
@@ -344,13 +409,29 @@ const PatientExam = () => {
               Paciente: <span className="text-ios-gray-900">{patientName}</span>
             </p>
           </div>
-          <button
-            onClick={generateBudgetFromOdontogram}
-            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-green text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-green/90 transition-all duration-200 touch-feedback"
-          >
-            <DollarSign className="h-5 w-5" />
-            Generar Presupuesto
-          </button>
+          <div className="flex items-center gap-3">
+            {modifiedTeeth.size > 0 && (
+              <button
+                onClick={handleSaveAllTeeth}
+                disabled={savingAll}
+                className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback disabled:opacity-50"
+              >
+                {savingAll ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Save className="h-5 w-5" />
+                )}
+                Guardar Todo ({modifiedTeeth.size})
+              </button>
+            )}
+            <button
+              onClick={generateBudgetFromOdontogram}
+              className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-green text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-green/90 transition-all duration-200 touch-feedback"
+            >
+              <DollarSign className="h-5 w-5" />
+              Generar Presupuesto
+            </button>
+          </div>
         </div>
       </div>
 
@@ -384,8 +465,21 @@ const PatientExam = () => {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-ios-gray-600">Condición</Label>
                   <Select
-                    value={toothForm.condition}
-                    onValueChange={(value) => setToothForm(prev => ({ ...prev, condition: value }))}
+                    value={toothCondition}
+                    onValueChange={(value) => {
+                      setToothCondition(value);
+                      // Mark as modified immediately
+                      setModifiedTeeth(prev => new Set(prev).add(selectedTooth));
+                      setTeeth(prev => ({
+                        ...prev,
+                        [selectedTooth]: {
+                          ...prev[selectedTooth],
+                          tooth_number: selectedTooth,
+                          condition: value,
+                          surfaces: prev[selectedTooth]?.surfaces || {}
+                        }
+                      }));
+                    }}
                   >
                     <SelectTrigger className="ios-input">
                       <SelectValue />
@@ -403,8 +497,20 @@ const PatientExam = () => {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-ios-gray-600">Tratamiento Requerido</Label>
                   <Select
-                    value={toothForm.treatment_id}
-                    onValueChange={(value) => setToothForm(prev => ({ ...prev, treatment_id: value }))}
+                    value={toothTreatmentId}
+                    onValueChange={(value) => {
+                      setToothTreatmentId(value);
+                      setModifiedTeeth(prev => new Set(prev).add(selectedTooth));
+                      setTeeth(prev => ({
+                        ...prev,
+                        [selectedTooth]: {
+                          ...prev[selectedTooth],
+                          tooth_number: selectedTooth,
+                          treatment_id: value,
+                          surfaces: prev[selectedTooth]?.surfaces || {}
+                        }
+                      }));
+                    }}
                   >
                     <SelectTrigger className="ios-input">
                       <SelectValue placeholder="Seleccionar tratamiento" />
@@ -422,8 +528,20 @@ const PatientExam = () => {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-ios-gray-600">Notas</Label>
                   <textarea
-                    value={toothForm.notes}
-                    onChange={(e) => setToothForm(prev => ({ ...prev, notes: e.target.value }))}
+                    value={toothNotes}
+                    onChange={(e) => {
+                      setToothNotes(e.target.value);
+                      setModifiedTeeth(prev => new Set(prev).add(selectedTooth));
+                      setTeeth(prev => ({
+                        ...prev,
+                        [selectedTooth]: {
+                          ...prev[selectedTooth],
+                          tooth_number: selectedTooth,
+                          notes: e.target.value,
+                          surfaces: prev[selectedTooth]?.surfaces || {}
+                        }
+                      }));
+                    }}
                     className="ios-input resize-none"
                     rows={3}
                     placeholder="Observaciones del diente..."
@@ -436,7 +554,7 @@ const PatientExam = () => {
                   className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
                 >
                   {saving ? (
-                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
                       <Save className="h-5 w-5" />
@@ -565,7 +683,7 @@ const PatientExam = () => {
               className="flex-1 h-12 rounded-xl bg-ios-green text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50"
             >
               {saving ? (
-                <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
                   <Check className="h-5 w-5" />
