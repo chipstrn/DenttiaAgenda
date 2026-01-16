@@ -1,6 +1,10 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext'; // Si usas el botón de salir
+const MainLayout = ({ children }: MainLayoutProps) => {
+  const navigate = useNavigate(); // <--- ESTA LÍNEA ES LA CLAVE
+  const { signOut } = useAuth(); // <--- Solo si vas a configurar el botón de salir
 
+  // ... resto de tu código
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
