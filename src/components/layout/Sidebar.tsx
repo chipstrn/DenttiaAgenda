@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -14,7 +14,10 @@ import {
   Stethoscope,
   FileText,
   Calculator,
-  ClipboardCheck
+  ClipboardCheck,
+  Shield,
+  UserCog,
+  ScrollText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +26,22 @@ import { toast } from 'sonner';
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [userRole, setUserRole] = useState<string>('');
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        setUserRole(data?.role || '');
+      }
+    };
+    fetchUserRole();
+  }, []);
 
   const mainMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', color: 'bg-ios-blue' },
@@ -36,10 +55,15 @@ const Sidebar = () => {
     { icon: FileText, label: 'Recetas', path: '/prescriptions', color: 'bg-ios-pink' },
   ];
 
-  const adminMenuItems = [
+  const financeMenuItems = [
     { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-teal' },
     { icon: Calculator, label: 'Corte de Caja', path: '/cash-register', color: 'bg-ios-blue' },
-    { icon: ClipboardCheck, label: 'Auditoría', path: '/cash-audit', color: 'bg-ios-red' },
+    { icon: ClipboardCheck, label: 'Auditoría Caja', path: '/cash-audit', color: 'bg-ios-orange' },
+  ];
+
+  const adminMenuItems = [
+    { icon: UserCog, label: 'Usuarios', path: '/users', color: 'bg-ios-purple', adminOnly: true },
+    { icon: ScrollText, label: 'Logs Auditoría', path: '/audit-logs', color: 'bg-ios-red', adminOnly: true },
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
   ];
 
@@ -56,6 +80,11 @@ const Sidebar = () => {
   };
 
   const MenuItem = ({ item }: { item: any }) => {
+    // Hide admin-only items for non-admins
+    if (item.adminOnly && userRole !== 'admin') {
+      return null;
+    }
+
     const isActive = location.pathname === item.path;
     return (
       <Link 
@@ -135,9 +164,22 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* Admin */}
+        {/* Finance */}
         <div className="mb-6">
           <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+            Finanzas
+          </p>
+          <div className="space-y-1">
+            {financeMenuItems.map((item) => (
+              <MenuItem key={item.path} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Admin */}
+        <div className="mb-6">
+          <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider flex items-center gap-2">
+            {userRole === 'admin' && <Shield className="h-3 w-3" />}
             Administración
           </p>
           <div className="space-y-1">
@@ -147,6 +189,24 @@ const Sidebar = () => {
           </div>
         </div>
       </nav>
+
+      {/* User Role Badge */}
+      {userRole && (
+        <div className="px-6 py-2">
+          <div className={cn(
+            "px-3 py-2 rounded-xl text-center text-xs font-semibold",
+            userRole === 'admin' ? 'bg-ios-red/15 text-ios-red' :
+            userRole === 'doctor' ? 'bg-ios-blue/15 text-ios-blue' :
+            userRole === 'receptionist' ? 'bg-ios-green/15 text-ios-green' :
+            'bg-ios-purple/15 text-ios-purple'
+          )}>
+            {userRole === 'admin' ? '👑 Administrador' :
+             userRole === 'doctor' ? '🩺 Doctor' :
+             userRole === 'receptionist' ? '📋 Recepcionista' :
+             '🦷 Asistente'}
+          </div>
+        </div>
+      )}
 
       {/* Logout */}
       <div className="p-3 border-t border-ios-gray-200/50">
