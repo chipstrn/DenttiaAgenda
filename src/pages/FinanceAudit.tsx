@@ -12,6 +12,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,7 +33,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   ClipboardCheck, AlertTriangle, CheckCircle, XCircle,
   Loader2, Eye, Calculator, FileText, TrendingUp, TrendingDown,
-  Edit3, Save, Calendar, BarChart3
+  Edit3, Save, Calendar, BarChart3, Trash2, Ban
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO } from 'date-fns';
@@ -58,14 +68,19 @@ interface CashRegister {
 }
 
 const FinanceAudit = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRegister, setSelectedRegister] = useState<CashRegister | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
-  const [selectedWeek, setSelectedWeek] = useState(0); // 0 = current week, 1 = last week, etc.
+  const [selectedWeek, setSelectedWeek] = useState(0);
+  
+  // Delete confirmation states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteType, setDeleteType] = useState<'void' | 'hard'>('void');
+  const [deleting, setDeleting] = useState(false);
   
   // Modo de auditoría externa (para migración)
   const [useManualSource, setUseManualSource] = useState(true);
@@ -78,6 +93,7 @@ const FinanceAudit = () => {
       const { data, error } = await supabase
         .from('cash_registers')
         .select('*, profiles(first_name, last_name)')
+        .neq('status', 'voided') // Don't show voided registers by default
         .order('register_date', { ascending: false });
 
       if (error) throw error;
@@ -215,6 +231,78 @@ const FinanceAudit = () => {
     }
   };
 
+  // Handle void (soft delete) - maintains historical traceability
+  const handleVoid = async () => {
+    if (!selectedRegister || !user?.id || !isAdmin) return;
+    
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('cash_registers')
+        .update({
+          status: 'voided',
+          admin_notes: `${adminNotes ? adminNotes + '\n\n' : ''}[ANULADO] por Admin el ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user.id
+        })
+        .eq('id', selectedRegister.id);
+
+      if (error) throw error;
+
+      toast.success('Corte anulado correctamente');
+      setShowDeleteConfirm(false);
+      setIsDetailOpen(false);
+      fetchRegisters();
+    } catch (error) {
+      console.error('Error voiding register:', error);
+      toast.error('Error al anular el corte');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Handle hard delete - permanent removal
+  const handleHardDelete = async () => {
+    if (!selectedRegister || !user?.id || !isAdmin) return;
+    
+    setDeleting(true);
+    try {
+      // First delete related records
+      await supabase
+        .from('daily_expenses')
+        .delete()
+        .eq('cash_register_id', selectedRegister.id);
+      
+      await supabase
+        .from('cash_withdrawals')
+        .delete()
+        .eq('cash_register_id', selectedRegister.id);
+
+      // Then delete the cash register
+      const { error } = await supabase
+        .from('cash_registers')
+        .delete()
+        .eq('id', selectedRegister.id);
+
+      if (error) throw error;
+
+      toast.success('Corte eliminado permanentemente');
+      setShowDeleteConfirm(false);
+      setIsDetailOpen(false);
+      fetchRegisters();
+    } catch (error) {
+      console.error('Error deleting register:', error);
+      toast.error('Error al eliminar el corte');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openDeleteConfirm = (type: 'void' | 'hard') => {
+    setDeleteType(type);
+    setShowDeleteConfirm(true);
+  };
+
   // Weekly audit calculations
   const weeklyData = useMemo(() => {
     const now = new Date();
@@ -259,6 +347,13 @@ const FinanceAudit = () => {
           <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-ios-red/10 text-ios-red font-medium">
             <XCircle className="h-3 w-3" />
             Rechazado
+          </span>
+        );
+      case 'voided':
+        return (
+          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-ios-gray-200 text-ios-gray-600 font-medium">
+            <Ban className="h-3 w-3" />
+            Anulado
           </span>
         );
       default:
@@ -418,7 +513,7 @@ const FinanceAudit = () => {
             
             {weeklyData.registers.length > 0 ? (
               <div className="divide-y divide-ios-gray-100">
-                {weeklyData.registers.map((register, index) => (
+                {weeklyData.registers.map((register) => (
                   <div 
                     key={register.id}
                     className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all cursor-pointer"
@@ -427,12 +522,14 @@ const FinanceAudit = () => {
                     <div className={cn(
                       "h-12 w-12 rounded-2xl flex items-center justify-center",
                       register.status === 'approved' ? 'bg-ios-green/15' :
-                      register.status === 'rejected' ? 'bg-ios-red/15' : 'bg-ios-orange/15'
+                      register.status === 'rejected' ? 'bg-ios-red/15' : 
+                      register.status === 'voided' ? 'bg-ios-gray-200' : 'bg-ios-orange/15'
                     )}>
                       <ClipboardCheck className={cn(
                         "h-6 w-6",
                         register.status === 'approved' ? 'text-ios-green' :
-                        register.status === 'rejected' ? 'text-ios-red' : 'text-ios-orange'
+                        register.status === 'rejected' ? 'text-ios-red' : 
+                        register.status === 'voided' ? 'text-ios-gray-500' : 'text-ios-orange'
                       )} />
                     </div>
                     
@@ -542,12 +639,14 @@ const FinanceAudit = () => {
                     <div className={cn(
                       "h-12 w-12 rounded-2xl flex items-center justify-center",
                       register.status === 'approved' ? 'bg-ios-green/15' :
-                      register.status === 'rejected' ? 'bg-ios-red/15' : 'bg-ios-orange/15'
+                      register.status === 'rejected' ? 'bg-ios-red/15' : 
+                      register.status === 'voided' ? 'bg-ios-gray-200' : 'bg-ios-orange/15'
                     )}>
                       <ClipboardCheck className={cn(
                         "h-6 w-6",
                         register.status === 'approved' ? 'text-ios-green' :
-                        register.status === 'rejected' ? 'text-ios-red' : 'text-ios-orange'
+                        register.status === 'rejected' ? 'text-ios-red' : 
+                        register.status === 'voided' ? 'text-ios-gray-500' : 'text-ios-orange'
                       )} />
                     </div>
                     
@@ -599,16 +698,41 @@ const FinanceAudit = () => {
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="sm:max-w-[650px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
           <DialogHeader className="p-6 pb-4 sticky top-0 bg-white z-10 border-b border-ios-gray-100">
-            <DialogTitle className="text-xl font-bold text-ios-gray-900">
-              Revisión de Corte de Caja
-            </DialogTitle>
-            <DialogDescription className="text-ios-gray-500">
-              {selectedRegister && format(parseISO(selectedRegister.register_date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-xl font-bold text-ios-gray-900">
+                  Revisión de Corte de Caja
+                </DialogTitle>
+                <DialogDescription className="text-ios-gray-500">
+                  {selectedRegister && format(parseISO(selectedRegister.register_date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
+                </DialogDescription>
+              </div>
+              
+              {/* Admin Delete Button */}
+              {isAdmin && selectedRegister && selectedRegister.status !== 'voided' && (
+                <button
+                  onClick={() => openDeleteConfirm('void')}
+                  className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
+                  title="Anular corte"
+                >
+                  <Trash2 className="h-5 w-5 text-ios-red" />
+                </button>
+              )}
+            </div>
           </DialogHeader>
           
           {selectedRegister && (
             <div className="px-6 pb-6 space-y-6">
+              {/* Voided Banner */}
+              {selectedRegister.status === 'voided' && (
+                <div className="p-4 rounded-2xl bg-ios-gray-100 border border-ios-gray-200">
+                  <div className="flex items-center gap-2 text-ios-gray-600">
+                    <Ban className="h-5 w-5" />
+                    <p className="font-semibold">Este corte ha sido anulado</p>
+                  </div>
+                </div>
+              )}
+
               {/* Cajero */}
               <div className="p-4 rounded-2xl bg-ios-gray-50">
                 <p className="text-sm text-ios-gray-500 mb-1">Cajero</p>
@@ -799,7 +923,7 @@ const FinanceAudit = () => {
               )}
 
               {/* Already reviewed */}
-              {selectedRegister.status !== 'pending' && (
+              {selectedRegister.status !== 'pending' && selectedRegister.status !== 'voided' && (
                 <div className={cn(
                   "p-4 rounded-2xl",
                   selectedRegister.status === 'approved' ? 'bg-ios-green/10' : 'bg-ios-red/10'
@@ -846,6 +970,87 @@ const FinanceAudit = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="rounded-3xl border-0 shadow-ios-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-ios-gray-900">
+              {deleteType === 'void' ? '¿Anular este corte?' : '¿Eliminar permanentemente?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-ios-gray-500">
+              {deleteType === 'void' ? (
+                <>
+                  El corte será marcado como <strong>ANULADO</strong> y no aparecerá en los reportes, 
+                  pero se mantendrá en el historial para trazabilidad.
+                </>
+              ) : (
+                <>
+                  <span className="text-ios-red font-semibold">⚠️ ADVERTENCIA:</span> Esta acción eliminará 
+                  permanentemente el corte y todos sus registros asociados (gastos, retiros). 
+                  <strong> Esta acción NO se puede deshacer.</strong>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {selectedRegister && (
+            <div className="my-4 p-4 rounded-xl bg-ios-gray-50">
+              <div className="text-sm space-y-1">
+                <p><strong>Fecha:</strong> {format(parseISO(selectedRegister.register_date), "d 'de' MMMM 'de' yyyy", { locale: es })}</p>
+                <p><strong>Cajero:</strong> {selectedRegister.profiles?.first_name} {selectedRegister.profiles?.last_name}</p>
+                <p><strong>Monto declarado:</strong> ${selectedRegister.closing_balance.toFixed(2)}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Option to switch between void and hard delete */}
+          {deleteType === 'void' && (
+            <button
+              onClick={() => setDeleteType('hard')}
+              className="text-sm text-ios-red hover:underline mb-4"
+            >
+              Prefiero eliminar permanentemente →
+            </button>
+          )}
+          {deleteType === 'hard' && (
+            <button
+              onClick={() => setDeleteType('void')}
+              className="text-sm text-ios-blue hover:underline mb-4"
+            >
+              ← Mejor solo anular (recomendado)
+            </button>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              className="rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 border-0"
+              disabled={deleting}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={deleteType === 'void' ? handleVoid : handleHardDelete}
+              disabled={deleting}
+              className={cn(
+                "rounded-xl font-semibold border-0",
+                deleteType === 'void' 
+                  ? 'bg-ios-orange text-white hover:bg-ios-orange/90' 
+                  : 'bg-ios-red text-white hover:bg-ios-red/90'
+              )}
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Procesando...
+                </>
+              ) : (
+                deleteType === 'void' ? 'Anular Corte' : 'Eliminar Permanentemente'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 };
