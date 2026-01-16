@@ -1,76 +1,40 @@
-// Configuración centralizada de la clínica Denttia
-export const CLINIC_CONFIG = {
-  name: 'Denttia Servicios Dentales y Ortodoncia',
-  shortName: 'Denttia',
-  
-  // Contacto oficial
-  whatsapp: '5212381106200', // Formato internacional para wa.me
-  whatsappDisplay: '238 110 6200',
-  phone: '238 392 9829',
-  
-  // Sedes
+export const CLINIC_INFO = {
+  name: "Denttia Servicios Dentales y Ortodoncia",
   locations: {
     tehuacan: {
       id: 'tehuacan',
-      name: 'Tehuacán',
-      address: 'Plaza Galerias, Calz. Adolfo López Mateos 2811-Local 3, Zona Alta, 75760 Tehuacán, Pue.',
-      shortAddress: 'Plaza Galerias, Local 3, Tehuacán',
+      name: "Sede Tehuacán",
+      address: "Plaza Galerias, Calz. Adolfo López Mateos 2811-Local 3, Zona Alta, 75760 Tehuacán, Pue.",
+      phones: {
+        whatsapp: "5212381106200", 
+        fixed: "238 392 9829"
+      }
     },
     huautla: {
       id: 'huautla',
-      name: 'Huautla',
-      address: 'Huautla de Jiménez, Oaxaca',
-      shortAddress: 'Huautla de Jiménez',
+      name: "Sede Huautla",
+      address: "Dirección de Huautla...", 
+      phones: {
+        whatsapp: "5212381106200", 
+        fixed: ""
+      }
     }
   },
-  
-  // Horarios
-  schedule: {
-    weekdays: {
-      morning: { start: '10:00', end: '14:00' },
-      afternoon: { start: '16:00', end: '20:00' }
-    },
-    saturday: {
-      morning: { start: '10:00', end: '14:00' },
-      afternoon: { start: '16:00', end: '20:00' }
-    },
-    sunday: null // Cerrado
-  },
-  
-  scheduleText: {
-    weekdays: 'Lunes a Viernes: 10:00 a.m. – 2:00 p.m. y 4:00 – 8:00 p.m.',
-    saturday: 'Sábado: 10:00 a.m. – 2:00 p.m. y 4:00 – 8:00 p.m.',
-    sunday: 'Domingo: Cerrado'
+  schedules: {
+    weekdays: "10:00 a.m. – 2:00 p.m., 4:00 – 8:00 p.m.",
+    saturday: "10:00 a.m. – 2:00 p.m., 4:00 – 8:00 p.m.",
+    sunday: "Cerrado"
   }
 };
 
-// Helper para generar link de WhatsApp
-export const generateWhatsAppLink = (message: string, phoneNumber?: string) => {
-  const phone = phoneNumber || CLINIC_CONFIG.whatsapp;
+// ESTA ES LA FUNCIÓN QUE FALTABA:
+export const getWhatsAppLink = (phone: string, message: string) => {
+  // Limpia el teléfono quitando espacios, guiones y paréntesis
+  const cleanPhone = phone.replace(/\D/g, ''); 
   const encodedMessage = encodeURIComponent(message);
-  return `https://wa.me/${phone}?text=${encodedMessage}`;
-};
-
-// Helper para generar mensaje de recordatorio de cita
-export const generateAppointmentReminder = (
-  patientName: string,
-  date: string,
-  time: string,
-  doctorName: string,
-  treatment: string
-) => {
-  return `¡Hola ${patientName}! 👋
-
-Te recordamos tu cita en *${CLINIC_CONFIG.name}*:
-
-📅 *Fecha:* ${date}
-🕐 *Hora:* ${time}
-👨‍⚕️ *Doctor:* ${doctorName}
-🦷 *Tratamiento:* ${treatment}
-
-📍 ${CLINIC_CONFIG.locations.tehuacan.shortAddress}
-
-Por favor confirma tu asistencia respondiendo a este mensaje.
-
-¡Te esperamos! 😊`;
+  
+  // Si el número no trae código de país (ej. 52), se lo agregamos por seguridad
+  const finalPhone = cleanPhone.length === 10 ? `521${cleanPhone}` : cleanPhone;
+  
+  return `https://wa.me/${finalPhone}?text=${encodedMessage}`;
 };
