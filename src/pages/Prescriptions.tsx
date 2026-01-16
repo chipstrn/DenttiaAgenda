@@ -23,7 +23,6 @@ import { Plus, FileText, Printer, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CLINIC } from '@/config/clinic';
 
 interface Prescription {
   id: string;
@@ -171,17 +170,16 @@ const Prescriptions = () => {
           .section { margin-bottom: 25px; }
           .section h3 { color: #1a365d; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
           .section p { white-space: pre-wrap; line-height: 1.6; }
-          .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #444; }
+          .footer { margin-top: 50px; text-align: center; }
           .signature { margin-top: 60px; border-top: 1px solid #333; width: 200px; margin-left: auto; margin-right: auto; padding-top: 10px; }
           @media print { body { padding: 20px; } }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>${CLINIC.name}</h1>
-          <p>${CLINIC.address}</p>
-          <p>Tel: ${CLINIC.phone} · WhatsApp: ${CLINIC.whatsapp}</p>
-          <p>Horario: L-V ${CLINIC.hours.weekdayMorning} y ${CLINIC.hours.weekdayEvening} · Sáb ${CLINIC.hours.saturdayMorning} y ${CLINIC.hours.saturdayEvening} · Dom ${CLINIC.hours.sunday}</p>
+          <h1>Denttia</h1>
+          <p>Clínica Dental - Tehuacán, Puebla</p>
+          <p>Tel: (238) 123-4567</p>
         </div>
         
         <div class="info">
@@ -205,7 +203,6 @@ const Prescriptions = () => {
             <p>${prescription.doctors?.full_name || 'Doctor'}</p>
             ${prescription.doctors?.specialty ? `<p style="font-size: 12px; color: #666;">${prescription.doctors.specialty}</p>` : ''}
           </div>
-          <p style="margin-top:20px;">WhatsApp para recordatorios: https://wa.me/52${CLINIC.whatsapp}</p>
         </div>
       </body>
       </html>
