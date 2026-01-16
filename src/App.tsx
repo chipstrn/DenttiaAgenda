@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import ChangePassword from "./pages/ChangePassword";
 import Patients from "./pages/Patients";
 import PatientIntake from "./pages/PatientIntake";
 import PatientAnamnesis from "./pages/PatientAnamnesis";
@@ -14,6 +15,9 @@ import Treatments from "./pages/Treatments";
 import Doctors from "./pages/Doctors";
 import Prescriptions from "./pages/Prescriptions";
 import Finance from "./pages/Finance";
+import FinanceAudit from "./pages/FinanceAudit";
+import CashRegisterClose from "./pages/CashRegisterClose";
+import StaffManagement from "./pages/StaffManagement";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -28,6 +32,11 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/change-password" element={
+            <ProtectedRoute>
+              <ChangePassword />
+            </ProtectedRoute>
+          } />
           
           <Route path="/" element={
             <ProtectedRoute>
@@ -74,27 +83,46 @@ const App = () => (
           
           {/* Clinical */}
           <Route path="/treatments" element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['doctor', 'admin']}>
               <Treatments />
             </ProtectedRoute>
           } />
           
           <Route path="/doctors" element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['doctor', 'admin']}>
               <Doctors />
             </ProtectedRoute>
           } />
           
           <Route path="/prescriptions" element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['doctor', 'admin']}>
               <Prescriptions />
             </ProtectedRoute>
           } />
           
-          {/* Admin */}
+          {/* Cash Register - Recepción */}
+          <Route path="/cash-register" element={
+            <ProtectedRoute allowedRoles={['recepcion', 'admin']}>
+              <CashRegisterClose />
+            </ProtectedRoute>
+          } />
+          
+          {/* Admin Only */}
           <Route path="/finance" element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin']}>
               <Finance />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/finance-audit" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <FinanceAudit />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/staff" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <StaffManagement />
             </ProtectedRoute>
           } />
           

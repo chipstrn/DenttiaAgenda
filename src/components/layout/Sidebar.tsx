@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -11,10 +11,12 @@ import {
   Settings, 
   LogOut,
   ChevronRight,
-  ChevronDown,
   Stethoscope,
   FileText,
-  ClipboardList
+  ClipboardList,
+  UserCog,
+  Calculator,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,22 +25,56 @@ import { toast } from 'sonner';
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>('doctor');
+  const [userName, setUserName] = useState<string>('');
 
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, first_name, last_name')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          setUserRole(profile.role || 'doctor');
+          setUserName(`${profile.first_name || ''} ${profile.last_name || ''}`.trim());
+        }
+      }
+    };
+
+    fetchUserRole();
+  }, []);
+
+  const isAdmin = userRole === 'admin';
+  const isRecepcion = userRole === 'recepcion';
+
+  // Menú principal - visible para todos
   const mainMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', color: 'bg-ios-blue' },
     { icon: Calendar, label: 'Agenda', path: '/agenda', color: 'bg-ios-orange' },
     { icon: Users, label: 'Pacientes', path: '/patients', color: 'bg-ios-green' },
   ];
 
+  // Menú clínico - visible para doctores y admin
   const clinicalMenuItems = [
     { icon: Activity, label: 'Tratamientos', path: '/treatments', color: 'bg-ios-purple' },
     { icon: Stethoscope, label: 'Doctores', path: '/doctors', color: 'bg-ios-indigo' },
     { icon: FileText, label: 'Recetas', path: '/prescriptions', color: 'bg-ios-pink' },
   ];
 
+  // Menú de recepción
+  const receptionMenuItems = [
+    { icon: Calculator, label: 'Corte de Caja', path: '/cash-register', color: 'bg-ios-teal' },
+  ];
+
+  // Menú de administración - solo admin
   const adminMenuItems = [
-    { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-teal' },
+    { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-green' },
+    { icon: Shield, label: 'Auditoría', path: '/finance-audit', color: 'bg-ios-red' },
+    { icon: UserCog, label: 'Personal', path: '/staff', color: 'bg-ios-purple' },
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
   ];
 
@@ -54,7 +90,7 @@ const Sidebar = () => {
     }
   };
 
-  const MenuItem = ({ item, index }: { item: any; index: number }) => {
+  const MenuItem = ({ item }: { item: any }) => {
     const isActive = location.pathname === item.path;
     return (
       <Link 
@@ -108,6 +144,19 @@ const Sidebar = () => {
         </div>
       </div>
 
+      {/* User Info */}
+      <div className="px-3 pb-4">
+        <div className="p-3 rounded-xl bg-white/60">
+          <p className="text-sm font-medium text-ios-gray-900 truncate">{userName || 'Usuario'}</p>
+          <p className={cn(
+            "text-xs font-medium mt-0.5",
+            isAdmin ? 'text-ios-red' : isRecepcion ? 'text-ios-blue' : 'text-ios-green'
+          )}>
+            {isAdmin ? 'Administrador' : isRecepcion ? 'Recepción' : 'Doctor'}
+          </p>
+        </div>
+      </div>
+
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 overflow-y-auto">
         {/* Main */}
@@ -116,35 +165,62 @@ const Sidebar = () => {
             Principal
           </p>
           <div className="space-y-1">
-            {mainMenuItems.map((item, index) => (
-              <MenuItem key={item.path} item={item} index={index} />
+            {mainMenuItems.map((item) => (
+              <MenuItem key={item.path} item={item} />
             ))}
           </div>
         </div>
 
-        {/* Clinical */}
-        <div className="mb-6">
-          <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-            Clínico
-          </p>
-          <div className="space-y-1">
-            {clinicalMenuItems.map((item, index) => (
-              <MenuItem key={item.path} item={item} index={index} />
-            ))}
+        {/* Clinical - Solo para doctores y admin */}
+        {(userRole === 'doctor' || isAdmin) && (
+          <div className="mb-6">
+            <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+              Clínico
+            </p>
+            <div className="space-y-1">
+              {clinicalMenuItems.map((item) => (
+                <MenuItem key={item.path} item={item} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Admin */}
-        <div className="mb-6">
-          <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-            Administración
-          </p>
-          <div className="space-y-1">
-            {adminMenuItems.map((item, index) => (
-              <MenuItem key={item.path} item={item} index={index} />
-            ))}
+        {/* Reception - Solo para recepción */}
+        {(isRecepcion || isAdmin) && (
+          <div className="mb-6">
+            <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+              Caja
+            </p>
+            <div className="space-y-1">
+              {receptionMenuItems.map((item) => (
+                <MenuItem key={item.path} item={item} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Admin - Solo para admin */}
+        {isAdmin && (
+          <div className="mb-6">
+            <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+              Administración
+            </p>
+            <div className="space-y-1">
+              {adminMenuItems.map((item) => (
+                <MenuItem key={item.path} item={item} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Settings for non-admin */}
+        {!isAdmin && (
+          <div className="mb-6">
+            <div className="space-y-1">
+              <MenuItem item={{ icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' }} />
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Logout */}

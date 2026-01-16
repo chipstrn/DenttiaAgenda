@@ -1,33 +1,95 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Activity } from 'lucide-react';
+import { Activity, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Login = () => {
   const navigate = useNavigate();
-  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) navigate('/');
+      if (session) {
+        checkPasswordChangeRequired(session.user.id);
+      }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        navigate('/');
+        await checkPasswordChangeRequired(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  const checkPasswordChangeRequired = async (userId: string) => {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('must_change_password')
+      .eq('id', userId)
+      .single();
+
+    if (profile?.must_change_password) {
+      navigate('/change-password');
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        // Registrar intento fallido
+        await supabase.from('login_attempts').insert({
+          email,
+          success: false,
+          failure_reason: error.message,
+        });
+        
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error('Credenciales incorrectas');
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+
+      // Registrar intento exitoso
+      await supabase.from('login_attempts').insert({
+        email,
+        success: true,
+      });
+
+      // Actualizar último login
+      await supabase
+        .from('profiles')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', data.user.id);
+
+      toast.success('Bienvenido');
+    } catch (error: any) {
+      toast.error('Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-ios-gray-100 flex flex-col items-center justify-center p-6">
@@ -40,111 +102,78 @@ const Login = () => {
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-3xl bg-gradient-to-br from-ios-blue to-ios-indigo shadow-ios-lg mb-4">
             <Activity className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Dental ERP</h1>
-          <p className="text-ios-gray-500 mt-1 font-medium">Gestión Clínica Inteligente</p>
+          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Denttia ERP</h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">Sistema de Gestión Dental</p>
         </div>
         
-        {/* Auth Card */}
+        {/* Login Card */}
         <div className="ios-card p-6 shadow-ios-lg">
-          <Auth
-            supabaseClient={supabase}
-            providers={[]} 
-            appearance={{
-              theme: ThemeSupa,
-              style: {
-                button: {
-                  borderRadius: '12px',
-                  height: '48px',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  background: 'hsl(211, 100%, 50%)',
-                  border: 'none',
-                },
-                input: {
-                  borderRadius: '12px',
-                  height: '48px',
-                  fontSize: '15px',
-                  background: 'hsl(0, 0%, 96%)',
-                  border: 'none',
-                  padding: '0 16px',
-                },
-                label: {
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: 'hsl(0, 0%, 45%)',
-                  marginBottom: '6px',
-                },
-                anchor: {
-                  color: 'hsl(211, 100%, 50%)',
-                  fontWeight: '500',
-                  fontSize: '14px',
-                },
-                message: {
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                },
-                container: {
-                  gap: '16px',
-                },
-              },
-              variables: {
-                default: {
-                  colors: {
-                    brand: 'hsl(211, 100%, 50%)',
-                    brandAccent: 'hsl(211, 100%, 45%)',
-                    inputBackground: 'hsl(0, 0%, 96%)',
-                    inputBorder: 'transparent',
-                    inputBorderFocus: 'hsl(211, 100%, 50%)',
-                    inputBorderHover: 'transparent',
-                  },
-                  radii: {
-                    borderRadiusButton: '12px',
-                    buttonBorderRadius: '12px',
-                    inputBorderRadius: '12px',
-                  },
-                  fontSizes: {
-                    baseBodySize: '15px',
-                    baseInputSize: '15px',
-                    baseLabelSize: '14px',
-                    baseButtonSize: '15px',
-                  },
-                  fonts: {
-                    bodyFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-                    buttonFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-                    inputFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-                    labelFontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-                  },
-                },
-              },
-            }}
-            theme="light"
-            localization={{
-              variables: {
-                sign_in: {
-                  email_label: 'Correo Electrónico',
-                  password_label: 'Contraseña',
-                  button_label: 'Iniciar Sesión',
-                  link_text: '¿Ya tienes cuenta? Inicia sesión',
-                },
-                sign_up: {
-                  email_label: 'Correo Electrónico',
-                  password_label: 'Contraseña',
-                  button_label: 'Crear Cuenta',
-                  link_text: '¿No tienes cuenta? Regístrate',
-                },
-                forgotten_password: {
-                  email_label: 'Correo Electrónico',
-                  button_label: 'Enviar instrucciones',
-                  link_text: '¿Olvidaste tu contraseña?',
-                },
-              }
-            }}
-          />
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-ios-gray-600">
+                Correo Electrónico
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="usuario@denttia.com"
+                required
+                className="ios-input"
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-ios-gray-600">
+                Contraseña
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="ios-input pr-12"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-ios-gray-400 hover:text-ios-gray-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Iniciando...
+                </>
+              ) : (
+                'Iniciar Sesión'
+              )}
+            </button>
+          </form>
+
+          <div className="mt-4 pt-4 border-t border-ios-gray-100">
+            <p className="text-center text-xs text-ios-gray-400">
+              Sistema privado. Contacta al administrador para obtener acceso.
+            </p>
+          </div>
         </div>
         
         {/* Footer */}
         <p className="text-center text-xs text-ios-gray-400 mt-6 font-medium">
-          © 2024 Dental ERP. Todos los derechos reservados.
+          © 2024 Denttia. Todos los derechos reservados.
         </p>
       </div>
     </div>
