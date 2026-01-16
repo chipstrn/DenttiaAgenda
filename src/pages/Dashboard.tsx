@@ -16,11 +16,16 @@ interface StatCardProps {
   icon: React.ElementType;
   color: string;
   delay?: number;
+  onClick?: () => void;
 }
 
-const StatCard = ({ title, value, icon: Icon, color, delay = 0 }: StatCardProps) => (
-  <div 
-    className="ios-card p-5 animate-slide-up"
+const StatCard = ({ title, value, icon: Icon, color, delay = 0, onClick }: StatCardProps) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "ios-card p-5 animate-slide-up text-left",
+      onClick && "hover:bg-ios-gray-50 transition-colors cursor-pointer"
+    )}
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className="flex items-start justify-between mb-4">
@@ -30,7 +35,7 @@ const StatCard = ({ title, value, icon: Icon, color, delay = 0 }: StatCardProps)
     </div>
     <p className="text-2xl font-bold text-ios-gray-900 tracking-tight">{value}</p>
     <p className="text-sm text-ios-gray-500 font-medium mt-1">{title}</p>
-  </div>
+  </button>
 );
 
 interface AppointmentItemProps {
@@ -172,6 +177,23 @@ const Dashboard = () => {
     fetchData();
   }, [fetchData]);
 
+  // Supabase Realtime subscription to auto-refresh appointments and stats
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-appointments')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchData]);
+
   return (
     <MainLayout>
       {/* Header */}
@@ -184,33 +206,37 @@ const Dashboard = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard 
-          title="Ingresos del Mes" 
+        <StatCard
+          title="Ingresos del Mes"
           value={`$${stats.monthlyRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
-          icon={DollarSign} 
+          icon={DollarSign}
           color="bg-ios-green"
           delay={0}
+          onClick={() => navigate('/finance-audit')}
         />
-        <StatCard 
-          title="Citas Hoy" 
+        <StatCard
+          title="Citas Hoy"
           value={stats.appointmentsToday}
-          icon={Calendar} 
+          icon={Calendar}
           color="bg-ios-orange"
           delay={50}
+          onClick={() => navigate('/agenda')}
         />
-        <StatCard 
-          title="Total Pacientes" 
+        <StatCard
+          title="Total Pacientes"
           value={stats.patientsCount}
-          icon={Users} 
+          icon={Users}
           color="bg-ios-blue"
           delay={100}
+          onClick={() => navigate('/patients')}
         />
-        <StatCard 
-          title="Tratamientos Activos" 
+        <StatCard
+          title="Tratamientos Activos"
           value={stats.activeTreatments}
-          icon={Activity} 
+          icon={Activity}
           color="bg-ios-purple"
           delay={150}
+          onClick={() => navigate('/treatments')}
         />
       </div>
 
