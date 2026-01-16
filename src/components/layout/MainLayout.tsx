@@ -6,15 +6,13 @@ import { Bell, Search, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom'; // <--- NUEVO
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
 const MainLayout = ({ children }: MainLayoutProps) => {
-  const { profile, user, signOut } = useAuth(); // <--- AGREGADO signOut
-  const navigate = useNavigate(); // <--- NUEVO
+  const { profile, user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -48,14 +46,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     }
   }, [profile?.role]);
 
-  // Función para cerrar sesión manteniendo el estilo
-  const handleProfileClick = async () => {
-    if (window.confirm('¿Deseas cerrar sesión?')) {
-      await signOut();
-      navigate('/login');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-ios-gray-100">
       <Sidebar />
@@ -81,11 +71,8 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           
           {/* Right Actions */}
           <div className="flex items-center gap-3">
-            {/* Quick Add Button - AHORA CON CLIC */}
-            <button 
-              onClick={() => navigate('/agenda')}
-              className="h-10 w-10 rounded-xl bg-ios-blue flex items-center justify-center shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
-            >
+            {/* Quick Add Button */}
+            <button className="h-10 w-10 rounded-xl bg-ios-blue flex items-center justify-center shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback">
               <Plus className="h-5 w-5 text-white" />
             </button>
 
@@ -95,16 +82,13 @@ const MainLayout = ({ children }: MainLayoutProps) => {
               <span className="absolute top-2 right-2 h-2 w-2 bg-ios-red rounded-full ring-2 ring-white"></span>
             </button>
             
-            {/* Profile - AHORA CON CLIC */}
+            {/* Profile */}
             <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-semibold text-ios-gray-900">{displayName}</p>
                 <p className="text-xs text-ios-gray-500 font-medium">{roleLabel}</p>
               </div>
-              <button 
-                onClick={handleProfileClick}
-                className="h-10 w-10 rounded-xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center text-white font-semibold text-sm shadow-ios-sm hover:shadow-ios transition-all duration-200 touch-feedback"
-              >
+              <button className="h-10 w-10 rounded-xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center text-white font-semibold text-sm shadow-ios-sm hover:shadow-ios transition-all duration-200 touch-feedback">
                 {initials}
               </button>
             </div>
