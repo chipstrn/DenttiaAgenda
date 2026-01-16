@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import { Bell, Search, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -11,32 +11,67 @@ interface MainLayoutProps {
   children: React.ReactNode;
 }
 
+interface UserData {
+  displayName: string;
+  initials: string;
+  role: string;
+}
+
 const MainLayout = ({ children }: MainLayoutProps) => {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [userData, setUserData] = useState<UserData>({
+    displayName: 'Usuario',
+    initials: 'US',
+    role: 'Doctor'
+  });
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchUserData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser(user);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !isMounted) return;
         
-        const { data: profileData } = await supabase
+        const { data: profileData, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select('first_name, last_name, role')
           .eq('id', user.id)
           .single();
         
-        if (profileData) {
-          setProfile(profileData);
+        if (error) {
+          console.error('Error fetching profile:', error);
+          return;
         }
+
+        if (isMounted && profileData) {
+          const displayName = profileData.first_name && profileData.last_name 
+            ? `${profileData.first_name} ${profileData.last_name}`
+            : user.email?.split('@')[0] || 'Usuario';
+
+          const initials = profileData.first_name && profileData.last_name
+            ? `${profileData.first_name[0]}${profileData.last_name[0]}`.toUpperCase()
+            : displayName.substring(0, 2).toUpperCase();
+
+          setUserData({
+            displayName,
+            initials,
+            role: profileData.role || 'Doctor'
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
       }
     };
 
     fetchUserData();
 
-    // Scroll listener for glass effect
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10);
     };
@@ -44,14 +79,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const displayName = profile?.first_name && profile?.last_name 
-    ? `${profile.first_name} ${profile.last_name}`
-    : user?.email?.split('@')[0] || 'Usuario';
-
-  const initials = profile?.first_name && profile?.last_name
-    ? `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase()
-    : displayName.substring(0, 2).toUpperCase();
 
   return (
     <div className="min-h-screen bg-ios-gray-100">
@@ -92,11 +119,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             {/* Profile */}
             <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">
-                <p className="text-sm font-semibold text-ios-gray-900">{displayName}</p>
-                <p className="text-xs text-ios-gray-500 font-medium">{profile?.role || 'Doctor'}</p>
+                <p className="text-sm font-semibold text-ios-gray-900">{userData.displayName}</p>
+                <p className="text-xs text-ios-gray-500 font-medium">{userData.role}</p>
               </div>
               <button className="h-10 w-10 rounded-xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center text-white font-semibold text-sm shadow-ios-sm hover:shadow-ios transition-all duration-200 touch-feedback">
-                {initials}
+                {userData.initials}
               </button>
             </div>
           </div>

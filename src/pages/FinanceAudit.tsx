@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -14,7 +14,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { 
   ClipboardCheck, AlertTriangle, CheckCircle, XCircle,
-  Loader2, Eye, Calculator, FileText, TrendingUp, TrendingDown
+  Loader2, Eye, Calculator, FileText, TrendingUp, TrendingDown,
+  Edit3, Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -55,17 +56,13 @@ const FinanceAudit = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  // Modo de auditoría
-  const [useManualSource, setUseManualSource] = useState(false);
+  // Modo de auditoría externa (para migración)
+  const [useManualSource, setUseManualSource] = useState(true); // Por defecto en modo manual para migración
   const [manualExpected, setManualExpected] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
   const [systemExpected, setSystemExpected] = useState(0);
 
-  useEffect(() => {
-    fetchRegisters();
-  }, []);
-
-  const fetchRegisters = async () => {
+  const fetchRegisters = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('cash_registers')
@@ -80,11 +77,14 @@ const FinanceAudit = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchSystemExpected = async (date: string, userId: string) => {
+  useEffect(() => {
+    fetchRegisters();
+  }, [fetchRegisters]);
+
+  const fetchSystemExpected = useCallback(async (date: string, userId: string) => {
     try {
-      // Calcular el total esperado del sistema basado en pagos del día
       const startOfDay = `${date}T00:00:00`;
       const endOfDay = `${date}T23:59:59`;
 
@@ -104,41 +104,54 @@ const FinanceAudit = () => {
       console.error('Error fetching system expected:', error);
       setSystemExpected(0);
     }
-  };
+  }, []);
 
-  const openDetail = async (register: CashRegister) => {
+  const openDetail = useCallback(async (register: CashRegister) => {
     setSelectedRegister(register);
     setAdminNotes(register.admin_notes || '');
-    setManualExpected('');
-    setUseManualSource(false);
+    
+    // Si ya tiene un system_total guardado, usarlo como valor manual
+    if (register.system_total > 0) {
+      setManualExpected(register.system_total.toString());
+    } else {
+      setManualExpected('');
+    }
+    
+    setUseManualSource(true); // Por defecto en modo manual para migración
     
     // Cargar el esperado del sistema
     await fetchSystemExpected(register.register_date, register.user_id);
     
     setIsDetailOpen(true);
-  };
+  }, [fetchSystemExpected]);
 
-  const calculateDifference = () => {
-    if (!selectedRegister) return 0;
+  const calculateDifference = useCallback(() => {
+    if (!selectedRegister) return { difference: 0, expected: 0 };
     
     const declared = selectedRegister.closing_balance;
     const expected = useManualSource 
       ? (parseFloat(manualExpected) || 0)
       : systemExpected;
     
-    return expected - declared;
-  };
+    return {
+      difference: declared - expected, // Positivo = sobrante, Negativo = faltante
+      expected
+    };
+  }, [selectedRegister, useManualSource, manualExpected, systemExpected]);
 
   const handleApprove = async () => {
     if (!selectedRegister) return;
+    
+    const { difference, expected } = calculateDifference();
+    
+    if (useManualSource && !manualExpected) {
+      toast.error('Ingresa el monto esperado del sistema externo');
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const difference = calculateDifference();
-      const expected = useManualSource 
-        ? (parseFloat(manualExpected) || 0)
-        : systemExpected;
-
       const { error } = await supabase
         .from('cash_registers')
         .update({
@@ -220,14 +233,33 @@ const FinanceAudit = () => {
     }
   };
 
-  const difference = calculateDifference();
+  const { difference, expected } = calculateDifference();
+
+  const pendingCount = registers.filter(r => r.status === 'pending').length;
+  const approvedCount = registers.filter(r => r.status === 'approved').length;
+  const withShortage = registers.filter(r => r.status === 'approved' && r.difference < 0).length;
+  const withSurplus = registers.filter(r => r.status === 'approved' && r.difference > 0).length;
 
   return (
     <MainLayout>
       {/* Header */}
       <div className="mb-8 animate-fade-in">
         <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Auditoría Financiera</h1>
-        <p className="text-ios-gray-500 mt-1 font-medium">Revisión de cortes de caja</p>
+        <p className="text-ios-gray-500 mt-1 font-medium">Revisión de cortes de caja - Modo Migración</p>
+      </div>
+
+      {/* Info Banner for Migration Mode */}
+      <div className="mb-6 p-4 rounded-2xl bg-ios-blue/10 border border-ios-blue/20 animate-fade-in">
+        <div className="flex items-start gap-3">
+          <Edit3 className="h-5 w-5 text-ios-blue mt-0.5" />
+          <div>
+            <p className="font-semibold text-ios-blue">Modo Auditoría Externa Activo</p>
+            <p className="text-sm text-ios-gray-600 mt-1">
+              Durante la migración, puedes ingresar manualmente el "Dinero Esperado" desde tu sistema anterior 
+              para compararlo con lo declarado por recepción.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Stats */}
@@ -238,10 +270,8 @@ const FinanceAudit = () => {
               <AlertTriangle className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-ios-gray-900">
-            {registers.filter(r => r.status === 'pending').length}
-          </p>
-          <p className="text-sm text-ios-gray-500 font-medium mt-1">Pendientes</p>
+          <p className="text-2xl font-bold text-ios-gray-900">{pendingCount}</p>
+          <p className="text-sm text-ios-gray-500 font-medium mt-1">Pendientes de Revisión</p>
         </div>
         
         <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
@@ -250,9 +280,7 @@ const FinanceAudit = () => {
               <CheckCircle className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-ios-gray-900">
-            {registers.filter(r => r.status === 'approved').length}
-          </p>
+          <p className="text-2xl font-bold text-ios-gray-900">{approvedCount}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Aprobados</p>
         </div>
         
@@ -262,9 +290,7 @@ const FinanceAudit = () => {
               <TrendingDown className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-ios-gray-900">
-            {registers.filter(r => r.difference < 0).length}
-          </p>
+          <p className="text-2xl font-bold text-ios-gray-900">{withShortage}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Con Faltante</p>
         </div>
         
@@ -274,9 +300,7 @@ const FinanceAudit = () => {
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-ios-gray-900">
-            {registers.filter(r => r.difference > 0).length}
-          </p>
+          <p className="text-2xl font-bold text-ios-gray-900">{withSurplus}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Con Sobrante</p>
         </div>
       </div>
@@ -285,6 +309,7 @@ const FinanceAudit = () => {
       <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '200ms' }}>
         <div className="p-5 border-b border-ios-gray-100">
           <h2 className="text-lg font-bold text-ios-gray-900">Cortes de Caja</h2>
+          <p className="text-sm text-ios-gray-500 mt-1">Haz clic en un corte para revisarlo</p>
         </div>
         
         {loading ? (
@@ -328,12 +353,13 @@ const FinanceAudit = () => {
                   <p className="font-bold text-ios-gray-900">
                     ${register.closing_balance.toFixed(2)}
                   </p>
-                  {register.difference !== 0 && register.status !== 'pending' && (
+                  <p className="text-xs text-ios-gray-500">Declarado</p>
+                  {register.status === 'approved' && register.difference !== 0 && (
                     <p className={cn(
-                      "text-sm font-medium",
+                      "text-sm font-semibold mt-1",
                       register.difference < 0 ? 'text-ios-red' : 'text-ios-green'
                     )}>
-                      {register.difference < 0 ? '-' : '+'}${Math.abs(register.difference).toFixed(2)}
+                      {register.difference < 0 ? 'Faltante' : 'Sobrante'}: ${Math.abs(register.difference).toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -355,10 +381,10 @@ const FinanceAudit = () => {
 
       {/* Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="sm:max-w-[600px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="p-6 pb-4 sticky top-0 bg-white z-10">
+        <DialogContent className="sm:max-w-[650px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="p-6 pb-4 sticky top-0 bg-white z-10 border-b border-ios-gray-100">
             <DialogTitle className="text-xl font-bold text-ios-gray-900">
-              Revisión de Corte
+              Revisión de Corte de Caja
             </DialogTitle>
             <DialogDescription className="text-ios-gray-500">
               {selectedRegister && format(new Date(selectedRegister.register_date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
@@ -369,17 +395,17 @@ const FinanceAudit = () => {
             <div className="px-6 pb-6 space-y-6">
               {/* Cajero */}
               <div className="p-4 rounded-2xl bg-ios-gray-50">
-                <p className="text-sm text-ios-gray-500 mb-1">Cajero</p>
-                <p className="font-semibold text-ios-gray-900">
+                <p className="text-sm text-ios-gray-500 mb-1">Cajero que envió el corte</p>
+                <p className="font-semibold text-ios-gray-900 text-lg">
                   {selectedRegister.profiles?.first_name} {selectedRegister.profiles?.last_name}
                 </p>
               </div>
 
-              {/* Declarado por Recepción */}
+              {/* Lo que declaró Recepción */}
               <div className="p-4 rounded-2xl bg-ios-blue/5 border border-ios-blue/20">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-4">
                   <Calculator className="h-5 w-5 text-ios-blue" />
-                  <p className="font-semibold text-ios-blue">Declarado por Recepción</p>
+                  <p className="font-semibold text-ios-blue">Declarado por Recepción (Carlo)</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -409,109 +435,127 @@ const FinanceAudit = () => {
                 </div>
                 <div className="mt-4 pt-4 border-t border-ios-blue/20">
                   <div className="flex justify-between items-center">
-                    <p className="font-semibold text-ios-gray-900">Saldo Final Declarado</p>
+                    <p className="font-semibold text-ios-gray-900">Total Declarado en Caja</p>
                     <p className="text-2xl font-bold text-ios-blue">${selectedRegister.closing_balance.toFixed(2)}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Fuente de Datos */}
+              {/* Saldo Sistema (Origen Externo) - EDITABLE */}
               {selectedRegister.status === 'pending' && (
-                <div className="p-4 rounded-2xl bg-ios-orange/5 border border-ios-orange/20">
+                <div className="p-4 rounded-2xl bg-ios-orange/5 border-2 border-ios-orange/30">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <FileText className="h-5 w-5 text-ios-orange" />
-                      <p className="font-semibold text-ios-orange">Fuente de Datos Esperados</p>
+                      <p className="font-semibold text-ios-orange">Saldo Sistema (Origen Externo)</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={cn("text-sm font-medium", !useManualSource ? 'text-ios-gray-900' : 'text-ios-gray-400')}>
-                        Sistema
+                      <span className={cn("text-xs font-medium", !useManualSource ? 'text-ios-gray-900' : 'text-ios-gray-400')}>
+                        Sistema Denttia
                       </span>
                       <Switch
                         checked={useManualSource}
                         onCheckedChange={setUseManualSource}
                       />
-                      <span className={cn("text-sm font-medium", useManualSource ? 'text-ios-gray-900' : 'text-ios-gray-400')}>
-                        Manual
+                      <span className={cn("text-xs font-medium", useManualSource ? 'text-ios-gray-900' : 'text-ios-gray-400')}>
+                        Sistema Anterior
                       </span>
                     </div>
                   </div>
 
                   {useManualSource ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <Label className="text-sm font-medium text-ios-gray-600">
-                        Monto Esperado (Sistema Legacy)
+                        Ingresa el total que debería haber según tu sistema anterior
                       </Label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-bold text-lg">$</span>
                         <input
                           type="number"
                           step="0.01"
                           value={manualExpected}
                           onChange={(e) => setManualExpected(e.target.value)}
-                          placeholder="Ingresa el total del sistema antiguo"
-                          className="ios-input pl-8"
+                          placeholder="Ej: 7100.00"
+                          className="ios-input pl-10 text-lg font-semibold h-14"
                         />
                       </div>
                       <p className="text-xs text-ios-gray-400">
-                        Ingresa el total que debería haber según tu sistema anterior
+                        💡 Revisa tu sistema antiguo y escribe aquí el total que debería haber en caja
                       </p>
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <p className="text-sm text-ios-gray-500 mb-2">Total calculado del sistema</p>
+                      <p className="text-sm text-ios-gray-500 mb-2">Total calculado del sistema Denttia</p>
                       <p className="text-3xl font-bold text-ios-gray-900">${systemExpected.toFixed(2)}</p>
                       <p className="text-xs text-ios-gray-400 mt-2">
-                        Basado en pagos registrados en el sistema
+                        Basado en pagos registrados en este sistema
                       </p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Resultado de Auditoría */}
-              {selectedRegister.status === 'pending' && (useManualSource ? manualExpected : true) && (
+              {/* Resultado de Auditoría Automática */}
+              {selectedRegister.status === 'pending' && (useManualSource ? manualExpected : true) && expected > 0 && (
                 <div className={cn(
-                  "p-4 rounded-2xl border",
-                  difference === 0 ? 'bg-ios-green/5 border-ios-green/20' :
-                  difference < 0 ? 'bg-ios-red/5 border-ios-red/20' : 'bg-ios-blue/5 border-ios-blue/20'
+                  "p-5 rounded-2xl border-2",
+                  difference === 0 ? 'bg-ios-green/5 border-ios-green/30' :
+                  difference < 0 ? 'bg-ios-red/5 border-ios-red/30' : 'bg-ios-blue/5 border-ios-blue/30'
                 )}>
-                  <p className="text-sm font-medium text-ios-gray-600 mb-2">Resultado de Auditoría</p>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Save className="h-5 w-5 text-ios-gray-600" />
+                    <p className="font-semibold text-ios-gray-900">Auditoría Automática</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4 text-center mb-4">
                     <div>
-                      <p className="text-sm text-ios-gray-500">
-                        Esperado: ${(useManualSource ? parseFloat(manualExpected) || 0 : systemExpected).toFixed(2)}
-                      </p>
-                      <p className="text-sm text-ios-gray-500">
-                        Declarado: ${selectedRegister.closing_balance.toFixed(2)}
-                      </p>
+                      <p className="text-sm text-ios-gray-500">Esperado (Sistema)</p>
+                      <p className="text-xl font-bold text-ios-gray-900">${expected.toFixed(2)}</p>
                     </div>
-                    <div className="text-right">
+                    <div>
+                      <p className="text-sm text-ios-gray-500">Declarado (Carlo)</p>
+                      <p className="text-xl font-bold text-ios-gray-900">${selectedRegister.closing_balance.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-ios-gray-500">Diferencia</p>
                       <p className={cn(
-                        "text-3xl font-bold",
+                        "text-xl font-bold",
                         difference === 0 ? 'text-ios-green' :
                         difference < 0 ? 'text-ios-red' : 'text-ios-blue'
                       )}>
-                        {difference === 0 ? 'CUADRA' :
+                        {difference === 0 ? '$0.00' :
                          difference < 0 ? `-$${Math.abs(difference).toFixed(2)}` : `+$${difference.toFixed(2)}`}
                       </p>
-                      <p className="text-sm text-ios-gray-500">
-                        {difference === 0 ? 'Sin diferencia' :
-                         difference < 0 ? 'FALTANTE' : 'SOBRANTE'}
-                      </p>
                     </div>
+                  </div>
+
+                  <div className={cn(
+                    "p-3 rounded-xl text-center",
+                    difference === 0 ? 'bg-ios-green/10' :
+                    difference < 0 ? 'bg-ios-red/10' : 'bg-ios-blue/10'
+                  )}>
+                    <p className={cn(
+                      "text-lg font-bold",
+                      difference === 0 ? 'text-ios-green' :
+                      difference < 0 ? 'text-ios-red' : 'text-ios-blue'
+                    )}>
+                      {difference === 0 ? '✓ CUADRA PERFECTO' :
+                       difference < 0 ? '⚠️ FALTANTE' : '📈 SOBRANTE'}
+                    </p>
                   </div>
                 </div>
               )}
 
               {/* Notas de Auditoría */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Notas de Auditoría</Label>
+                <Label className="text-sm font-medium text-ios-gray-600">
+                  Notas de Auditoría {selectedRegister.status === 'pending' && '(opcional)'}
+                </Label>
                 <textarea
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   rows={3}
-                  placeholder="Agrega observaciones sobre este corte..."
+                  placeholder="Ej: Faltaron $100, Carlo comenta que pagó el garrafón de agua y olvidó anotarlo..."
                   className="ios-input resize-none"
                   disabled={selectedRegister.status !== 'pending'}
                 />
@@ -547,19 +591,44 @@ const FinanceAudit = () => {
               {/* Already reviewed */}
               {selectedRegister.status !== 'pending' && (
                 <div className={cn(
-                  "p-4 rounded-2xl text-center",
+                  "p-4 rounded-2xl",
                   selectedRegister.status === 'approved' ? 'bg-ios-green/10' : 'bg-ios-red/10'
                 )}>
-                  <p className={cn(
-                    "font-semibold",
-                    selectedRegister.status === 'approved' ? 'text-ios-green' : 'text-ios-red'
-                  )}>
-                    {selectedRegister.status === 'approved' ? 'Corte Aprobado' : 'Corte Rechazado'}
-                  </p>
-                  {selectedRegister.difference !== 0 && (
-                    <p className="text-sm text-ios-gray-600 mt-1">
-                      Diferencia registrada: {selectedRegister.difference < 0 ? '-' : '+'}${Math.abs(selectedRegister.difference).toFixed(2)}
+                  <div className="text-center mb-3">
+                    <p className={cn(
+                      "font-bold text-lg",
+                      selectedRegister.status === 'approved' ? 'text-ios-green' : 'text-ios-red'
+                    )}>
+                      {selectedRegister.status === 'approved' ? '✓ Corte Aprobado' : '✗ Corte Rechazado'}
                     </p>
+                  </div>
+                  
+                  {selectedRegister.status === 'approved' && (
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-ios-gray-500">Esperado (Sistema)</p>
+                        <p className="font-semibold">${selectedRegister.system_total.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-ios-gray-500">Diferencia Final</p>
+                        <p className={cn(
+                          "font-semibold",
+                          selectedRegister.difference < 0 ? 'text-ios-red' : 
+                          selectedRegister.difference > 0 ? 'text-ios-blue' : 'text-ios-green'
+                        )}>
+                          {selectedRegister.difference === 0 ? 'Cuadra' :
+                           selectedRegister.difference < 0 ? `-$${Math.abs(selectedRegister.difference).toFixed(2)} (Faltante)` : 
+                           `+$${selectedRegister.difference.toFixed(2)} (Sobrante)`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedRegister.admin_notes && (
+                    <div className="mt-3 pt-3 border-t border-ios-gray-200">
+                      <p className="text-sm text-ios-gray-500">Notas:</p>
+                      <p className="text-ios-gray-900">{selectedRegister.admin_notes}</p>
+                    </div>
                   )}
                 </div>
               )}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
 interface DailyExpense {
@@ -31,7 +32,7 @@ const CashRegisterClose = () => {
   const [submitting, setSubmitting] = useState(false);
   const [existingRegister, setExistingRegister] = useState<any>(null);
   
-  // Formulario de corte
+  // Formulario de corte - Individual states
   const [openingBalance, setOpeningBalance] = useState('');
   const [servicesCash, setServicesCash] = useState('');
   const [servicesCard, setServicesCard] = useState('');
@@ -48,11 +49,7 @@ const CashRegisterClose = () => {
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  useEffect(() => {
-    checkExistingRegister();
-  }, []);
-
-  const checkExistingRegister = async () => {
+  const checkExistingRegister = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -62,47 +59,60 @@ const CashRegisterClose = () => {
         .select('*')
         .eq('user_id', user.id)
         .eq('register_date', today)
-        .single();
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking register:', error);
+        return;
+      }
 
       if (data) {
         setExistingRegister(data);
       }
     } catch (error) {
-      // No existe registro para hoy, está bien
+      console.error('Error in checkExistingRegister:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [today]);
 
-  const addExpense = () => {
-    setExpenses([...expenses, { description: '', amount: '', category: 'general' }]);
-  };
+  useEffect(() => {
+    checkExistingRegister();
+  }, [checkExistingRegister]);
 
-  const removeExpense = (index: number) => {
-    setExpenses(expenses.filter((_, i) => i !== index));
-  };
+  const addExpense = useCallback(() => {
+    setExpenses(prev => [...prev, { description: '', amount: '', category: 'general' }]);
+  }, []);
 
-  const updateExpense = (index: number, field: keyof DailyExpense, value: string) => {
-    const updated = [...expenses];
-    updated[index] = { ...updated[index], [field]: value };
-    setExpenses(updated);
-  };
+  const removeExpense = useCallback((index: number) => {
+    setExpenses(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
-  const addWithdrawal = () => {
-    setWithdrawals([...withdrawals, { description: '', amount: '', authorized_by: '' }]);
-  };
+  const updateExpense = useCallback((index: number, field: keyof DailyExpense, value: string) => {
+    setExpenses(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }, []);
 
-  const removeWithdrawal = (index: number) => {
-    setWithdrawals(withdrawals.filter((_, i) => i !== index));
-  };
+  const addWithdrawal = useCallback(() => {
+    setWithdrawals(prev => [...prev, { description: '', amount: '', authorized_by: '' }]);
+  }, []);
 
-  const updateWithdrawal = (index: number, field: keyof CashWithdrawal, value: string) => {
-    const updated = [...withdrawals];
-    updated[index] = { ...updated[index], [field]: value };
-    setWithdrawals(updated);
-  };
+  const removeWithdrawal = useCallback((index: number) => {
+    setWithdrawals(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
-  const calculateTotals = () => {
+  const updateWithdrawal = useCallback((index: number, field: keyof CashWithdrawal, value: string) => {
+    setWithdrawals(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }, []);
+
+  const calculateTotals = useCallback(() => {
     const totalExpenses = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     const totalWithdrawals = withdrawals.reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
     
@@ -121,7 +131,7 @@ const CashRegisterClose = () => {
       closingBalance,
       grandTotal: totalCash + totalCard + totalTransfer
     };
-  };
+  }, [expenses, withdrawals, servicesCash, productsCash, otherIncome, servicesCard, productsCard, servicesTransfer, productsTransfer, openingBalance]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +225,8 @@ const CashRegisterClose = () => {
     );
   }
 
-  // Si ya existe un corte para hoy
+  // Si ya existe un corte para hoy - MODO CIEGO para recepción
+  // NO muestra diferencias ni resultados de auditoría
   if (existingRegister) {
     return (
       <MainLayout>
@@ -237,11 +248,11 @@ const CashRegisterClose = () => {
             
             <h1 className="text-2xl font-bold text-ios-gray-900 mb-2">
               {existingRegister.status === 'approved' ? 'Corte Aprobado' :
-               existingRegister.status === 'rejected' ? 'Corte Rechazado' : 'Corte Enviado'}
+               existingRegister.status === 'rejected' ? 'Corte Rechazado' : 'Corte Enviado a Revisión'}
             </h1>
             <p className="text-ios-gray-500 mb-8">
               {existingRegister.status === 'pending' 
-                ? 'Tu corte de caja está pendiente de revisión por el administrador.'
+                ? 'Tu corte de caja está pendiente de revisión por el administrador. Te notificaremos cuando sea revisado.'
                 : existingRegister.status === 'approved'
                 ? 'El administrador ha aprobado tu corte de caja.'
                 : 'El administrador ha rechazado tu corte. Revisa las notas.'}
@@ -252,17 +263,27 @@ const CashRegisterClose = () => {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-ios-gray-500">Fecha</span>
-                  <span className="font-medium">{format(new Date(existingRegister.register_date), 'dd/MM/yyyy')}</span>
+                  <span className="font-medium">{format(new Date(existingRegister.register_date), "d 'de' MMMM, yyyy", { locale: es })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-ios-gray-500">Saldo Inicial</span>
                   <span className="font-medium">${existingRegister.opening_balance.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-ios-gray-500">Saldo Final Declarado</span>
-                  <span className="font-bold text-ios-green">${existingRegister.closing_balance.toFixed(2)}</span>
+                  <span className="text-ios-gray-500">Total Efectivo Declarado</span>
+                  <span className="font-bold text-ios-blue">${existingRegister.closing_balance.toFixed(2)}</span>
                 </div>
-                {existingRegister.admin_notes && (
+                <div className="flex justify-between">
+                  <span className="text-ios-gray-500">Total Tarjeta</span>
+                  <span className="font-medium">${(existingRegister.services_card + existingRegister.products_card).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-ios-gray-500">Total Transferencia</span>
+                  <span className="font-medium">${(existingRegister.services_transfer + existingRegister.products_transfer).toFixed(2)}</span>
+                </div>
+                
+                {/* Solo mostrar notas del admin si el corte fue revisado */}
+                {existingRegister.status !== 'pending' && existingRegister.admin_notes && (
                   <div className="pt-3 border-t border-ios-gray-100">
                     <p className="text-sm text-ios-gray-500 mb-1">Notas del Administrador:</p>
                     <p className="text-ios-gray-900">{existingRegister.admin_notes}</p>
@@ -270,6 +291,15 @@ const CashRegisterClose = () => {
                 )}
               </div>
             </div>
+
+            {/* Mensaje de espera para cortes pendientes */}
+            {existingRegister.status === 'pending' && (
+              <div className="mt-6 p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20">
+                <p className="text-sm text-ios-orange font-medium">
+                  ⏳ El administrador revisará tu corte y te notificará el resultado.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </MainLayout>
@@ -282,7 +312,7 @@ const CashRegisterClose = () => {
       <div className="mb-8 animate-fade-in">
         <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Corte de Caja</h1>
         <p className="text-ios-gray-500 mt-1 font-medium">
-          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy")}
+          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
         </p>
       </div>
 
@@ -559,7 +589,7 @@ const CashRegisterClose = () => {
           )}
         </div>
 
-        {/* Resumen */}
+        {/* Resumen - Solo muestra lo que declaró, NO muestra comparación */}
         <div className="ios-card p-5 bg-ios-gray-900 text-white animate-slide-up" style={{ animationDelay: '300ms' }}>
           <h2 className="font-bold mb-4">Resumen del Corte</h2>
           <div className="space-y-3">

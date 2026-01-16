@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Stethoscope,
   FileText,
-  ClipboardList,
   UserCog,
   Calculator,
   Shield
@@ -22,63 +21,107 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface UserProfile {
+  role: string;
+  first_name: string;
+  last_name: string;
+}
+
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [userRole, setUserRole] = useState<string>('doctor');
-  const [userName, setUserName] = useState<string>('');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
+    let isMounted = true;
+
+    const fetchUserProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !isMounted) return;
+
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('role, first_name, last_name')
           .eq('id', user.id)
           .single();
         
-        if (profile) {
-          setUserRole(profile.role || 'doctor');
-          setUserName(`${profile.first_name || ''} ${profile.last_name || ''}`.trim());
+        if (error) {
+          console.error('Error fetching profile:', error);
+          return;
+        }
+
+        if (isMounted && profile) {
+          setUserProfile({
+            role: profile.role || 'doctor',
+            first_name: profile.first_name || '',
+            last_name: profile.last_name || ''
+          });
+        }
+      } catch (error) {
+        console.error('Error in fetchUserProfile:', error);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
         }
       }
     };
 
-    fetchUserRole();
+    fetchUserProfile();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setUserProfile(null);
+      } else if (event === 'SIGNED_IN') {
+        fetchUserProfile();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const userRole = userProfile?.role || 'doctor';
+  const userName = useMemo(() => {
+    if (!userProfile) return 'Usuario';
+    return `${userProfile.first_name} ${userProfile.last_name}`.trim() || 'Usuario';
+  }, [userProfile]);
 
   const isAdmin = userRole === 'admin';
   const isRecepcion = userRole === 'recepcion';
 
   // Menú principal - visible para todos
-  const mainMenuItems = [
+  const mainMenuItems = useMemo(() => [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', color: 'bg-ios-blue' },
     { icon: Calendar, label: 'Agenda', path: '/agenda', color: 'bg-ios-orange' },
     { icon: Users, label: 'Pacientes', path: '/patients', color: 'bg-ios-green' },
-  ];
+  ], []);
 
   // Menú clínico - visible para doctores y admin
-  const clinicalMenuItems = [
+  const clinicalMenuItems = useMemo(() => [
     { icon: Activity, label: 'Tratamientos', path: '/treatments', color: 'bg-ios-purple' },
     { icon: Stethoscope, label: 'Doctores', path: '/doctors', color: 'bg-ios-indigo' },
     { icon: FileText, label: 'Recetas', path: '/prescriptions', color: 'bg-ios-pink' },
-  ];
+  ], []);
 
   // Menú de recepción
-  const receptionMenuItems = [
+  const receptionMenuItems = useMemo(() => [
     { icon: Calculator, label: 'Corte de Caja', path: '/cash-register', color: 'bg-ios-teal' },
-  ];
+  ], []);
 
   // Menú de administración - solo admin
-  const adminMenuItems = [
+  const adminMenuItems = useMemo(() => [
     { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-green' },
     { icon: Shield, label: 'Auditoría', path: '/finance-audit', color: 'bg-ios-red' },
     { icon: UserCog, label: 'Personal', path: '/staff', color: 'bg-ios-purple' },
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
-  ];
+  ], []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
@@ -88,14 +131,15 @@ const Sidebar = () => {
       console.error('Error signing out:', error);
       toast.error('Error al cerrar sesión');
     }
-  };
+  }, [navigate]);
 
-  const MenuItem = ({ item }: { item: any }) => {
+  const MenuItem = useCallback(({ item }: { item: { icon: React.ElementType; label: string; path: string; color: string } }) => {
     const isActive = location.pathname === item.path;
+    const Icon = item.icon;
+    
     return (
       <Link 
         to={item.path} 
-        key={item.path}
         className="block"
       >
         <div
@@ -111,7 +155,7 @@ const Sidebar = () => {
             item.color,
             isActive ? "scale-100" : "scale-95 group-hover:scale-100"
           )}>
-            <item.icon className="h-4 w-4 text-white" />
+            <Icon className="h-4 w-4 text-white" />
           </div>
           <span className={cn(
             "flex-1 text-sm font-medium transition-colors duration-200",
@@ -125,7 +169,28 @@ const Sidebar = () => {
         </div>
       </Link>
     );
-  };
+  }, [location.pathname]);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-72 bg-ios-gray-50 flex flex-col fixed left-0 top-0 border-r border-ios-gray-200/50">
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center shadow-ios-sm">
+              <Activity className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-ios-gray-900 tracking-tight">Denttia</h1>
+              <p className="text-xs text-ios-gray-500 font-medium">ERP Dental</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="h-8 w-8 border-2 border-ios-blue border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-72 bg-ios-gray-50 flex flex-col fixed left-0 top-0 border-r border-ios-gray-200/50">
@@ -147,7 +212,7 @@ const Sidebar = () => {
       {/* User Info */}
       <div className="px-3 pb-4">
         <div className="p-3 rounded-xl bg-white/60">
-          <p className="text-sm font-medium text-ios-gray-900 truncate">{userName || 'Usuario'}</p>
+          <p className="text-sm font-medium text-ios-gray-900 truncate">{userName}</p>
           <p className={cn(
             "text-xs font-medium mt-0.5",
             isAdmin ? 'text-ios-red' : isRecepcion ? 'text-ios-blue' : 'text-ios-green'
