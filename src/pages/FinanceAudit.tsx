@@ -77,7 +77,7 @@ const FinanceAudit = () => {
     try {
       const { data, error } = await supabase
         .from('cash_registers')
-        .select('*, profiles!cash_registers_cashier_id_fkey(first_name, last_name)')
+        .select('*, profiles(first_name, last_name)')
         .order('register_date', { ascending: false });
 
       if (error) throw error;
