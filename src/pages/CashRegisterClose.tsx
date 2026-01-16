@@ -8,13 +8,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   Banknote, CreditCard, ArrowUpRight, Send, 
-  Loader2, CheckCircle, Clock, Plus, Trash2, Shield, RefreshCw, XCircle
+  Loader2, CheckCircle, Clock, Plus, Trash2, Shield, RefreshCw, XCircle, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, isToday, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
+// Interfaces (Igual que antes)
 interface DailyExpense {
   id?: string;
   description: string;
@@ -37,7 +38,7 @@ const CashRegisterClose = () => {
   const [existingRegister, setExistingRegister] = useState<any>(null);
   const [showNewShiftForm, setShowNewShiftForm] = useState(false);
   
-  // Formulario de corte - Individual states
+  // Estados del Formulario
   const [openingBalance, setOpeningBalance] = useState('');
   const [servicesCash, setServicesCash] = useState('');
   const [servicesCard, setServicesCard] = useState('');
@@ -48,28 +49,29 @@ const CashRegisterClose = () => {
   const [otherIncome, setOtherIncome] = useState('');
   const [otherIncomeNotes, setOtherIncomeNotes] = useState('');
   
-  // Gastos y retiros
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [withdrawals, setWithdrawals] = useState<CashWithdrawal[]>([]);
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  // Si es admin, redirigir a auditoría
+  // Redirección de Admin
   useEffect(() => {
     if (isAdmin) {
       navigate('/finance-audit', { replace: true });
     }
   }, [isAdmin, navigate]);
 
+  // 1. MEJORA CRÍTICA: Lógica de búsqueda de corte
   const checkExistingRegister = useCallback(async () => {
     if (!user?.id || isAdmin) return;
 
     try {
-      // Get the most recent register for this user
+      // Buscamos el último corte que NO esté eliminado (voided)
       const { data, error } = await supabase
         .from('cash_registers')
         .select('*')
         .eq('cashier_id', user.id)
+        .neq('status', 'voided') // <--- CLAVE: Ignorar los eliminados
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -81,17 +83,16 @@ const CashRegisterClose = () => {
       }
 
       if (data) {
-        // Check if the register is from today
         const registerDate = parseISO(data.register_date);
-        const isFromToday = isToday(registerDate);
         
-        // Only show existing register status if it's from today
-        if (isFromToday) {
+        // Solo bloqueamos si es de HOY. Si es de ayer, dejamos abrir uno nuevo.
+        if (isToday(registerDate)) {
           setExistingRegister(data);
         } else {
-          // Register is from a previous day, allow new register
           setExistingRegister(null);
         }
+      } else {
+        setExistingRegister(null);
       }
     } catch (error) {
       console.error('Error in checkExistingRegister:', error);
@@ -100,9 +101,33 @@ const CashRegisterClose = () => {
     }
   }, [user?.id, isAdmin]);
 
+  // 2. MEJORA CRÍTICA: Suscripción en Tiempo Real (Magic Update)
   useEffect(() => {
     checkExistingRegister();
-  }, [checkExistingRegister]);
+
+    // Si hay un corte pendiente, escuchamos cambios en vivo
+    const channel = supabase
+      .channel('cash_register_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cash_registers',
+          filter: `cashier_id=eq.${user?.id}`,
+        },
+        (payload) => {
+          // Si el admin aprueba/rechaza/borra, actualizamos la pantalla al instante
+          console.log('Cambio detectado:', payload);
+          checkExistingRegister();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [checkExistingRegister, user?.id]);
 
   const resetForm = useCallback(() => {
     setOpeningBalance('');
@@ -119,7 +144,6 @@ const CashRegisterClose = () => {
   }, []);
 
   const handleStartNewShift = useCallback(() => {
-    // Reset form and show new shift form
     resetForm();
     setExistingRegister(null);
     setShowNewShiftForm(true);
@@ -130,14 +154,9 @@ const CashRegisterClose = () => {
     checkExistingRegister();
   }, [checkExistingRegister]);
 
-  const addExpense = useCallback(() => {
-    setExpenses(prev => [...prev, { description: '', amount: '', category: 'general' }]);
-  }, []);
-
-  const removeExpense = useCallback((index: number) => {
-    setExpenses(prev => prev.filter((_, i) => i !== index));
-  }, []);
-
+  // Funciones auxiliares de gastos (Sin cambios)
+  const addExpense = useCallback(() => setExpenses(prev => [...prev, { description: '', amount: '', category: 'general' }]), []);
+  const removeExpense = useCallback((index: number) => setExpenses(prev => prev.filter((_, i) => i !== index)), []);
   const updateExpense = useCallback((index: number, field: keyof DailyExpense, value: string) => {
     setExpenses(prev => {
       const updated = [...prev];
@@ -146,14 +165,8 @@ const CashRegisterClose = () => {
     });
   }, []);
 
-  const addWithdrawal = useCallback(() => {
-    setWithdrawals(prev => [...prev, { description: '', amount: '', authorized_by: '' }]);
-  }, []);
-
-  const removeWithdrawal = useCallback((index: number) => {
-    setWithdrawals(prev => prev.filter((_, i) => i !== index));
-  }, []);
-
+  const addWithdrawal = useCallback(() => setWithdrawals(prev => [...prev, { description: '', amount: '', authorized_by: '' }]), []);
+  const removeWithdrawal = useCallback((index: number) => setWithdrawals(prev => prev.filter((_, i) => i !== index)), []);
   const updateWithdrawal = useCallback((index: number, field: keyof CashWithdrawal, value: string) => {
     setWithdrawals(prev => {
       const updated = [...prev];
@@ -173,12 +186,7 @@ const CashRegisterClose = () => {
     const closingBalance = (parseFloat(openingBalance) || 0) + totalCash - totalExpenses - totalWithdrawals;
     
     return {
-      totalExpenses,
-      totalWithdrawals,
-      totalCash,
-      totalCard,
-      totalTransfer,
-      closingBalance,
+      totalExpenses, totalWithdrawals, totalCash, totalCard, totalTransfer, closingBalance,
       grandTotal: totalCash + totalCard + totalTransfer
     };
   }, [expenses, withdrawals, servicesCash, productsCash, otherIncome, servicesCard, productsCard, servicesTransfer, productsTransfer, openingBalance]);
@@ -186,13 +194,11 @@ const CashRegisterClose = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
-    
     setSubmitting(true);
 
     try {
       const totals = calculateTotals();
 
-      // Crear registro de caja
       const { data: registerData, error: registerError } = await supabase
         .from('cash_registers')
         .insert({
@@ -218,45 +224,28 @@ const CashRegisterClose = () => {
 
       if (registerError) throw registerError;
 
-      // Guardar gastos
+      // Insertar Gastos
       if (expenses.length > 0) {
-        const expensesData = expenses
-          .filter(e => e.description && e.amount)
-          .map(e => ({
-            user_id: user.id,
-            cash_register_id: registerData.id,
-            description: e.description,
-            amount: parseFloat(e.amount),
-            category: e.category
-          }));
-
-        if (expensesData.length > 0) {
-          await supabase.from('daily_expenses').insert(expensesData);
-        }
+        const validExpenses = expenses.filter(e => e.description && e.amount).map(e => ({
+          user_id: user.id, cash_register_id: registerData.id, description: e.description, amount: parseFloat(e.amount), category: e.category
+        }));
+        if (validExpenses.length) await supabase.from('daily_expenses').insert(validExpenses);
       }
 
-      // Guardar retiros
+      // Insertar Retiros
       if (withdrawals.length > 0) {
-        const withdrawalsData = withdrawals
-          .filter(w => w.description && w.amount)
-          .map(w => ({
-            user_id: user.id,
-            cash_register_id: registerData.id,
-            description: w.description,
-            amount: parseFloat(w.amount),
-            authorized_by: w.authorized_by
-          }));
-
-        if (withdrawalsData.length > 0) {
-          await supabase.from('cash_withdrawals').insert(withdrawalsData);
-        }
+        const validWithdrawals = withdrawals.filter(w => w.description && w.amount).map(w => ({
+          user_id: user.id, cash_register_id: registerData.id, description: w.description, amount: parseFloat(w.amount), authorized_by: w.authorized_by
+        }));
+        if (validWithdrawals.length) await supabase.from('cash_withdrawals').insert(validWithdrawals);
       }
 
       toast.success('Corte enviado a revisión');
-      setExistingRegister(registerData);
+      // No seteamos existingRegister manualmente aquí, dejamos que la suscripción o el check lo haga
+      checkExistingRegister();
       setShowNewShiftForm(false);
     } catch (error: any) {
-      console.error('Error submitting cash register:', error);
+      console.error('Error submitting:', error);
       toast.error(error.message || 'Error al enviar corte');
     } finally {
       setSubmitting(false);
@@ -265,475 +254,256 @@ const CashRegisterClose = () => {
 
   const totals = calculateTotals();
 
-  // Si es admin, mostrar mensaje de redirección
-  if (isAdmin) {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center py-16">
-          <div className="text-center">
-            <Shield className="h-16 w-16 text-ios-blue mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-ios-gray-900 mb-2">Acceso de Administrador</h2>
-            <p className="text-ios-gray-500 mb-4">Redirigiendo a Auditoría Financiera...</p>
-            <Loader2 className="h-6 w-6 animate-spin text-ios-blue mx-auto" />
-          </div>
-        </div>
-      </MainLayout>
-    );
-  }
+  // Loading State
+  if (loading) return <MainLayout><div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-ios-blue" /></div></MainLayout>;
 
-  if (loading) {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
-        </div>
-      </MainLayout>
-    );
-  }
-
-  // Si ya existe un corte para hoy y NO estamos mostrando el formulario de nuevo turno
+  // VISTA: YA EXISTE UN CORTE HOY (Aprobado, Pendiente o Rechazado)
   if (existingRegister && !showNewShiftForm) {
     return (
       <MainLayout>
         <div className="max-w-2xl mx-auto">
           <div className="text-center py-12 animate-scale-in">
+            {/* Icono de Estado Dinámico */}
             <div className={cn(
               "h-24 w-24 rounded-full flex items-center justify-center mx-auto mb-6",
               existingRegister.status === 'approved' ? 'bg-ios-green/15' :
               existingRegister.status === 'rejected' ? 'bg-ios-red/15' : 'bg-ios-orange/15'
             )}>
-              {existingRegister.status === 'approved' ? (
-                <CheckCircle className="h-12 w-12 text-ios-green" />
-              ) : existingRegister.status === 'rejected' ? (
-                <XCircle className="h-12 w-12 text-ios-red" />
-              ) : (
-                <Clock className="h-12 w-12 text-ios-orange" />
-              )}
+              {existingRegister.status === 'approved' ? <CheckCircle className="h-12 w-12 text-ios-green" /> :
+               existingRegister.status === 'rejected' ? <XCircle className="h-12 w-12 text-ios-red" /> :
+               <Clock className="h-12 w-12 text-ios-orange" />}
             </div>
             
             <h1 className="text-2xl font-bold text-ios-gray-900 mb-2">
               {existingRegister.status === 'approved' ? 'Corte Aprobado' :
                existingRegister.status === 'rejected' ? 'Corte Rechazado' : 'Corte Enviado a Revisión'}
             </h1>
-            <p className="text-ios-gray-500 mb-6">
+            
+            <p className="text-ios-gray-500 mb-6 max-w-md mx-auto">
               {existingRegister.status === 'pending' 
-                ? 'Tu corte de caja está pendiente de revisión por el administrador.'
+                ? 'Tu corte está en espera. Si el administrador lo aprueba, verás el cambio aquí automáticamente.'
                 : existingRegister.status === 'approved'
-                ? 'El administrador ha aprobado tu corte de caja.'
-                : 'El administrador ha rechazado tu corte. Revisa las notas.'}
+                ? '¡Todo en orden! Puedes iniciar un nuevo turno si es necesario.'
+                : 'Hay discrepancias en tu corte. Revisa las notas y contacta al administrador.'}
             </p>
 
-            <div className="ios-card p-6 text-left mb-6">
-              <h3 className="font-semibold text-ios-gray-900 mb-4">Resumen del Corte</h3>
-              <div className="space-y-3">
+            {/* Tarjeta de Resumen */}
+            <div className="ios-card p-6 text-left mb-6 shadow-sm border border-gray-100">
+              <h3 className="font-semibold text-ios-gray-900 mb-4 flex justify-between">
+                Resumen del Corte
+                <span className="text-xs font-normal text-gray-400">ID: {existingRegister.id.slice(0,8)}</span>
+              </h3>
+              <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-ios-gray-500">Fecha</span>
-                  <span className="font-medium">{format(new Date(existingRegister.register_date), "d 'de' MMMM, yyyy", { locale: es })}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-ios-gray-500">Hora de envío</span>
-                  <span className="font-medium">{format(new Date(existingRegister.created_at), "HH:mm", { locale: es })}</span>
+                  <span className="text-ios-gray-500">Fecha / Hora</span>
+                  <span className="font-medium">{format(parseISO(existingRegister.created_at), "d MMM, HH:mm", { locale: es })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-ios-gray-500">Saldo Inicial</span>
-                  <span className="font-medium">${existingRegister.opening_balance.toFixed(2)}</span>
+                  <span className="font-medium text-gray-700">${existingRegister.opening_balance.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-ios-gray-500">Total Efectivo Declarado</span>
-                  <span className="font-bold text-ios-blue">${existingRegister.closing_balance.toFixed(2)}</span>
+                <div className="flex justify-between border-t border-gray-100 pt-2">
+                  <span className="text-ios-gray-900 font-medium">Total Declarado</span>
+                  <span className="font-bold text-ios-blue text-lg">${existingRegister.closing_balance.toFixed(2)}</span>
                 </div>
                 
-                {existingRegister.status !== 'pending' && existingRegister.admin_notes && (
-                  <div className="pt-3 border-t border-ios-gray-100">
-                    <p className="text-sm text-ios-gray-500 mb-1">Notas del Administrador:</p>
-                    <p className="text-ios-gray-900">{existingRegister.admin_notes}</p>
+                {existingRegister.admin_notes && (
+                  <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-100">
+                    <p className="text-xs font-bold text-red-600 mb-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Notas del Administrador:
+                    </p>
+                    <p className="text-gray-800 italic">"{existingRegister.admin_notes}"</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {existingRegister.status === 'pending' && (
-              <div className="mb-6 p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20">
-                <p className="text-sm text-ios-orange font-medium">
-                  ⏳ El administrador revisará tu corte y te notificará el resultado.
+            {/* BOTÓN CRÍTICO: INICIAR NUEVO TURNO */}
+            <div className="space-y-3">
+              <button
+                onClick={handleStartNewShift}
+                className="w-full h-14 rounded-2xl bg-ios-blue text-white font-bold text-lg shadow-ios-lg hover:bg-ios-blue/90 transition-all duration-200 touch-feedback flex items-center justify-center gap-3"
+              >
+                <RefreshCw className="h-5 w-5" />
+                Iniciar Nuevo Turno
+              </button>
+              
+              {existingRegister.status === 'pending' && (
+                <p className="text-xs text-center text-gray-400">
+                  ¿Te equivocaste? Pide al admin que lo elimine para empezar de nuevo.
                 </p>
-              </div>
-            )}
-
-            {/* Botón para iniciar nuevo turno - SIEMPRE VISIBLE */}
-            <button
-              onClick={handleStartNewShift}
-              className="w-full h-14 rounded-2xl bg-ios-blue text-white font-bold text-lg shadow-ios-lg hover:bg-ios-blue/90 transition-all duration-200 touch-feedback flex items-center justify-center gap-3"
-            >
-              <RefreshCw className="h-6 w-6" />
-              Iniciar Nuevo Turno
-            </button>
-            
-            <p className="text-sm text-ios-gray-400 mt-3">
-              Puedes registrar múltiples cortes (turnos) en un mismo día
-            </p>
+              )}
+            </div>
           </div>
         </div>
       </MainLayout>
     );
   }
 
-  // Formulario de corte (nuevo o primer turno del día)
+  // VISTA: FORMULARIO DE NUEVO CORTE
   return (
     <MainLayout>
-      {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">
-          {showNewShiftForm ? 'Nuevo Turno' : 'Corte de Caja'}
-        </h1>
-        <p className="text-ios-gray-500 mt-1 font-medium">
-          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
-        </p>
+      <div className="mb-6 animate-fade-in flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">
+            {showNewShiftForm ? 'Nuevo Turno' : 'Corte de Caja'}
+          </h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">
+            {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
+          </p>
+        </div>
         {showNewShiftForm && (
-          <div className="mt-3 p-3 rounded-xl bg-ios-blue/10 border border-ios-blue/20">
-            <p className="text-sm text-ios-blue font-medium">
-              📋 Registrando un nuevo turno para hoy
-            </p>
-          </div>
-        )}
-      </div>
-
-      <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
-        {/* Saldo Inicial */}
-        <div className="ios-card p-5 animate-slide-up">
-          <h2 className="font-bold text-ios-gray-900 mb-4">Saldo Inicial</h2>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-ios-gray-600">Efectivo en caja al iniciar</Label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-              <input
-                type="number"
-                step="0.01"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
-                placeholder="0.00"
-                required
-                className="ios-input pl-8"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Ingresos por Servicios */}
-        <div className="ios-card p-5 animate-slide-up">
-          <h2 className="font-bold text-ios-gray-900 mb-4">Ingresos por Servicios</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600 flex items-center gap-2">
-                <Banknote className="h-4 w-4 text-ios-green" />
-                Efectivo
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={servicesCash}
-                  onChange={(e) => setServicesCash(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600 flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-ios-purple" />
-                Tarjeta
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={servicesCard}
-                  onChange={(e) => setServicesCard(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600 flex items-center gap-2">
-                <ArrowUpRight className="h-4 w-4 text-ios-blue" />
-                Transferencia
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={servicesTransfer}
-                  onChange={(e) => setServicesTransfer(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Ingresos por Productos */}
-        <div className="ios-card p-5 animate-slide-up">
-          <h2 className="font-bold text-ios-gray-900 mb-4">Ingresos por Productos</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600 flex items-center gap-2">
-                <Banknote className="h-4 w-4 text-ios-green" />
-                Efectivo
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={productsCash}
-                  onChange={(e) => setProductsCash(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600 flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-ios-purple" />
-                Tarjeta
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={productsCard}
-                  onChange={(e) => setProductsCard(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600 flex items-center gap-2">
-                <ArrowUpRight className="h-4 w-4 text-ios-blue" />
-                Transferencia
-              </Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={productsTransfer}
-                  onChange={(e) => setProductsTransfer(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Otros Ingresos */}
-        <div className="ios-card p-5 animate-slide-up">
-          <h2 className="font-bold text-ios-gray-900 mb-4">Otros Ingresos</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600">Monto</Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={otherIncome}
-                  onChange={(e) => setOtherIncome(e.target.value)}
-                  placeholder="0.00"
-                  className="ios-input pl-8"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-ios-gray-600">Concepto</Label>
-              <input
-                value={otherIncomeNotes}
-                onChange={(e) => setOtherIncomeNotes(e.target.value)}
-                placeholder="Descripción del ingreso"
-                className="ios-input"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Gastos del Día */}
-        <div className="ios-card p-5 animate-slide-up">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-ios-gray-900">Gastos del Día</h2>
-            <button
-              type="button"
-              onClick={addExpense}
-              className="flex items-center gap-1 text-sm text-ios-blue font-medium hover:opacity-70 transition-opacity"
-            >
-              <Plus className="h-4 w-4" />
-              Agregar
-            </button>
-          </div>
-          
-          {expenses.length === 0 ? (
-            <p className="text-ios-gray-400 text-sm text-center py-4">Sin gastos registrados</p>
-          ) : (
-            <div className="space-y-3">
-              {expenses.map((expense, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-ios-gray-50 rounded-xl">
-                  <input
-                    value={expense.description}
-                    onChange={(e) => updateExpense(index, 'description', e.target.value)}
-                    placeholder="Descripción"
-                    className="flex-1 ios-input"
-                  />
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={expense.amount}
-                      onChange={(e) => updateExpense(index, 'amount', e.target.value)}
-                      placeholder="0.00"
-                      className="ios-input pl-7"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeExpense(index)}
-                    className="h-10 w-10 rounded-lg bg-ios-red/10 text-ios-red flex items-center justify-center hover:bg-ios-red/20 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Retiros de Efectivo */}
-        <div className="ios-card p-5 animate-slide-up">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-ios-gray-900">Retiros de Efectivo</h2>
-            <button
-              type="button"
-              onClick={addWithdrawal}
-              className="flex items-center gap-1 text-sm text-ios-blue font-medium hover:opacity-70 transition-opacity"
-            >
-              <Plus className="h-4 w-4" />
-              Agregar
-            </button>
-          </div>
-          
-          {withdrawals.length === 0 ? (
-            <p className="text-ios-gray-400 text-sm text-center py-4">Sin retiros registrados</p>
-          ) : (
-            <div className="space-y-3">
-              {withdrawals.map((withdrawal, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-ios-gray-50 rounded-xl">
-                  <input
-                    value={withdrawal.description}
-                    onChange={(e) => updateWithdrawal(index, 'description', e.target.value)}
-                    placeholder="Motivo"
-                    className="flex-1 ios-input"
-                  />
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ios-gray-400 font-medium">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={withdrawal.amount}
-                      onChange={(e) => updateWithdrawal(index, 'amount', e.target.value)}
-                      placeholder="0.00"
-                      className="ios-input pl-7"
-                    />
-                  </div>
-                  <input
-                    value={withdrawal.authorized_by}
-                    onChange={(e) => updateWithdrawal(index, 'authorized_by', e.target.value)}
-                    placeholder="Autorizado por"
-                    className="w-36 ios-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeWithdrawal(index)}
-                    className="h-10 w-10 rounded-lg bg-ios-red/10 text-ios-red flex items-center justify-center hover:bg-ios-red/20 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Resumen */}
-        <div className="ios-card p-5 bg-ios-gray-900 text-white animate-slide-up">
-          <h2 className="font-bold mb-4">Resumen del Corte</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between text-ios-gray-300">
-              <span>Total Efectivo</span>
-              <span className="font-medium text-white">${totals.totalCash.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-ios-gray-300">
-              <span>Total Tarjeta</span>
-              <span className="font-medium text-white">${totals.totalCard.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-ios-gray-300">
-              <span>Total Transferencia</span>
-              <span className="font-medium text-white">${totals.totalTransfer.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-ios-gray-300">
-              <span>(-) Gastos</span>
-              <span className="font-medium text-ios-red">${totals.totalExpenses.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-ios-gray-300">
-              <span>(-) Retiros</span>
-              <span className="font-medium text-ios-red">${totals.totalWithdrawals.toFixed(2)}</span>
-            </div>
-            <div className="pt-3 border-t border-ios-gray-700 flex justify-between">
-              <span className="font-bold">Saldo Final en Caja</span>
-              <span className="text-2xl font-bold text-ios-green">${totals.closingBalance.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full h-14 rounded-2xl bg-ios-blue text-white font-bold text-lg shadow-ios-lg hover:bg-ios-blue/90 transition-all duration-200 touch-feedback disabled:opacity-50 flex items-center justify-center gap-3 animate-slide-up"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="h-6 w-6 animate-spin" />
-              Enviando...
-            </>
-          ) : (
-            <>
-              <Send className="h-6 w-6" />
-              Enviar Corte a Revisión
-            </>
-          )}
-        </button>
-
-        {/* Cancel new shift button */}
-        {showNewShiftForm && (
-          <button
-            type="button"
+          <button 
             onClick={handleCancelNewShift}
-            className="w-full h-12 rounded-xl bg-ios-gray-100 text-ios-gray-600 font-semibold hover:bg-ios-gray-200 transition-all duration-200 touch-feedback"
+            className="text-sm text-ios-blue font-medium hover:bg-blue-50 px-3 py-1 rounded-full transition-colors"
           >
             Cancelar
           </button>
         )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="max-w-3xl space-y-6 pb-20">
+        
+        {/* SECCIÓN 1: SALDO INICIAL */}
+        <div className="ios-card p-5 animate-slide-up border-l-4 border-l-ios-blue">
+          <h2 className="font-bold text-ios-gray-900 mb-4 flex items-center gap-2">
+            <Shield className="h-5 w-5 text-ios-blue" /> Saldo Inicial
+          </h2>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-ios-gray-600">¿Con cuánto dinero abres caja?</Label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+              <input
+                type="number" step="0.01" required placeholder="0.00"
+                value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)}
+                className="ios-input pl-8 text-lg font-medium"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECCIÓN 2: INGRESOS SERVICIOS */}
+        <div className="ios-card p-5 animate-slide-up delay-75">
+          <h2 className="font-bold text-ios-gray-900 mb-4">Ingresos por Servicios</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <InputMoney label="Efectivo" icon={<Banknote className="text-green-500" />} value={servicesCash} onChange={setServicesCash} />
+            <InputMoney label="Tarjeta" icon={<CreditCard className="text-purple-500" />} value={servicesCard} onChange={setServicesCard} />
+            <InputMoney label="Transferencia" icon={<ArrowUpRight className="text-blue-500" />} value={servicesTransfer} onChange={setServicesTransfer} />
+          </div>
+        </div>
+
+        {/* SECCIÓN 3: INGRESOS PRODUCTOS */}
+        <div className="ios-card p-5 animate-slide-up delay-100">
+          <h2 className="font-bold text-ios-gray-900 mb-4">Ingresos por Productos</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <InputMoney label="Efectivo" icon={<Banknote className="text-green-600" />} value={productsCash} onChange={setProductsCash} />
+            <InputMoney label="Tarjeta" icon={<CreditCard className="text-purple-600" />} value={productsCard} onChange={setProductsCard} />
+            <InputMoney label="Transferencia" icon={<ArrowUpRight className="text-blue-600" />} value={productsTransfer} onChange={setProductsTransfer} />
+          </div>
+        </div>
+
+        {/* SECCIÓN 4: OTROS INGRESOS */}
+        {(otherIncome || otherIncomeNotes || showNewShiftForm) && (
+           <div className="ios-card p-5 animate-slide-up delay-150">
+             <h2 className="font-bold text-ios-gray-900 mb-4">Otros Ingresos</h2>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <InputMoney label="Monto" value={otherIncome} onChange={setOtherIncome} />
+               <div className="space-y-2">
+                 <Label className="text-xs uppercase text-gray-400 font-bold tracking-wider">Concepto</Label>
+                 <input value={otherIncomeNotes} onChange={(e) => setOtherIncomeNotes(e.target.value)} placeholder="Ej. Propina" className="ios-input" />
+               </div>
+             </div>
+           </div>
+        )}
+
+        {/* GASTOS Y RETIROS (Simplificados visualmente) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <DynamicList title="Gastos del Día" items={expenses} onAdd={addExpense} onRemove={removeExpense} onUpdate={updateExpense} type="expense" />
+          <DynamicList title="Retiros de Efectivo" items={withdrawals} onAdd={addWithdrawal} onRemove={removeWithdrawal} onUpdate={updateWithdrawal} type="withdrawal" />
+        </div>
+
+        {/* RESUMEN FINAL FLOTANTE O FIJO */}
+        <div className="ios-card p-6 bg-slate-900 text-white shadow-xl animate-slide-up delay-200">
+          <h2 className="font-bold mb-4 text-lg border-b border-gray-700 pb-2">Resumen Preliminar</h2>
+          <div className="space-y-2 text-sm">
+            <Row label="Total Efectivo" value={totals.totalCash} color="text-green-400" />
+            <Row label="Total Digital (Tarjeta/Transf)" value={totals.totalCard + totals.totalTransfer} />
+            <Row label="(-) Gastos y Retiros" value={totals.totalExpenses + totals.totalWithdrawals} color="text-red-400" />
+            <div className="pt-3 mt-2 border-t border-gray-700 flex justify-between items-end">
+              <span className="font-bold text-gray-300">Saldo Final en Caja</span>
+              <span className="text-3xl font-bold text-white tracking-tight">${totals.closingBalance.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full h-16 rounded-2xl bg-ios-blue text-white font-bold text-xl shadow-ios-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-3"
+        >
+          {submitting ? <Loader2 className="animate-spin" /> : <Send />}
+          {submitting ? 'Enviando...' : 'Finalizar Turno'}
+        </button>
       </form>
     </MainLayout>
   );
 };
+
+// Componentes UI Auxiliares para limpiar el código principal
+const InputMoney = ({ label, icon, value, onChange }: any) => (
+  <div className="space-y-2">
+    <Label className="text-xs uppercase text-gray-400 font-bold tracking-wider flex items-center gap-1">
+      {icon} {label}
+    </Label>
+    <div className="relative group">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 font-medium group-focus-within:text-ios-blue">$</span>
+      <input
+        type="number" step="0.01" placeholder="0.00"
+        value={value} onChange={(e) => onChange(e.target.value)}
+        className="ios-input pl-7 transition-all focus:ring-2 focus:ring-ios-blue/20"
+      />
+    </div>
+  </div>
+);
+
+const Row = ({ label, value, color = "text-white" }: any) => (
+  <div className="flex justify-between items-center">
+    <span className="text-gray-400">{label}</span>
+    <span className={`font-medium ${color}`}>${value.toFixed(2)}</span>
+  </div>
+);
+
+const DynamicList = ({ title, items, onAdd, onRemove, onUpdate, type }: any) => (
+  <div className="ios-card p-5 animate-slide-up">
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="font-bold text-ios-gray-900">{title}</h2>
+      <button type="button" onClick={onAdd} className="p-1 rounded-full hover:bg-gray-100 text-ios-blue">
+        <Plus className="h-5 w-5" />
+      </button>
+    </div>
+    <div className="space-y-3">
+      {items.map((item: any, i: number) => (
+        <div key={i} className="flex gap-2 items-start">
+          <input 
+            placeholder={type === 'expense' ? "Descripción" : "Motivo"} 
+            value={item.description} 
+            onChange={(e) => onUpdate(i, 'description', e.target.value)}
+            className="ios-input flex-1 min-w-0" 
+          />
+          <input 
+            type="number" placeholder="0" 
+            value={item.amount} 
+            onChange={(e) => onUpdate(i, 'amount', e.target.value)}
+            className="ios-input w-20 text-center px-1" 
+          />
+          <button type="button" onClick={() => onRemove(i)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      {items.length === 0 && <p className="text-xs text-center text-gray-400 py-2">Ninguno registrado</p>}
+    </div>
+  </div>
+);
 
 export default CashRegisterClose;
