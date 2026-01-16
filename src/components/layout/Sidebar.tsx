@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -11,10 +11,10 @@ import {
   Settings, 
   LogOut,
   ChevronRight,
+  ChevronDown,
   Stethoscope,
   FileText,
-  Calculator,
-  ClipboardCheck
+  ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const mainMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', color: 'bg-ios-blue' },
@@ -38,8 +39,6 @@ const Sidebar = () => {
 
   const adminMenuItems = [
     { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-teal' },
-    { icon: Calculator, label: 'Corte de Caja', path: '/cash-register', color: 'bg-ios-blue' },
-    { icon: ClipboardCheck, label: 'Auditoría', path: '/cash-audit', color: 'bg-ios-red' },
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
   ];
 
@@ -55,7 +54,7 @@ const Sidebar = () => {
     }
   };
 
-  const MenuItem = ({ item }: { item: any }) => {
+  const MenuItem = ({ item, index }: { item: any; index: number }) => {
     const isActive = location.pathname === item.path;
     return (
       <Link 
@@ -117,8 +116,8 @@ const Sidebar = () => {
             Principal
           </p>
           <div className="space-y-1">
-            {mainMenuItems.map((item) => (
-              <MenuItem key={item.path} item={item} />
+            {mainMenuItems.map((item, index) => (
+              <MenuItem key={item.path} item={item} index={index} />
             ))}
           </div>
         </div>
@@ -129,8 +128,8 @@ const Sidebar = () => {
             Clínico
           </p>
           <div className="space-y-1">
-            {clinicalMenuItems.map((item) => (
-              <MenuItem key={item.path} item={item} />
+            {clinicalMenuItems.map((item, index) => (
+              <MenuItem key={item.path} item={item} index={index} />
             ))}
           </div>
         </div>
@@ -141,8 +140,8 @@ const Sidebar = () => {
             Administración
           </p>
           <div className="space-y-1">
-            {adminMenuItems.map((item) => (
-              <MenuItem key={item.path} item={item} />
+            {adminMenuItems.map((item, index) => (
+              <MenuItem key={item.path} item={item} index={index} />
             ))}
           </div>
         </div>
