@@ -10,24 +10,17 @@ import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
-// Agregamos onClick opcional a la interfaz
 interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ElementType;
   color: string;
   delay?: number;
-  onClick?: () => void; // <--- NUEVO
 }
 
-// Hacemos el div clickeable si existe onClick
-const StatCard = ({ title, value, icon: Icon, color, delay = 0, onClick }: StatCardProps) => (
+const StatCard = ({ title, value, icon: Icon, color, delay = 0 }: StatCardProps) => (
   <div 
-    onClick={onClick}
-    className={cn(
-      "ios-card p-5 animate-slide-up transition-all duration-200", 
-      onClick && "cursor-pointer hover:shadow-md active:scale-95" // Efecto visual al pasar el mouse
-    )}
+    className="ios-card p-5 animate-slide-up"
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className="flex items-start justify-between mb-4">
@@ -131,6 +124,7 @@ const Dashboard = () => {
       const dayEnd = endOfDay(today).toISOString();
       const monthStart = startOfMonth(today).toISOString();
 
+      // Fetch ALL data (shared across clinic)
       const [
         patientsResult,
         appointmentsResult,
@@ -188,7 +182,7 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Stats Grid - AQUI ESTAN LOS CAMBIOS DE CLIC */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         <StatCard 
           title="Ingresos del Mes" 
@@ -196,7 +190,6 @@ const Dashboard = () => {
           icon={DollarSign} 
           color="bg-ios-green"
           delay={0}
-          onClick={() => navigate('/finance-audit')} // Redirige a Auditoría
         />
         <StatCard 
           title="Citas Hoy" 
@@ -204,7 +197,6 @@ const Dashboard = () => {
           icon={Calendar} 
           color="bg-ios-orange"
           delay={50}
-          onClick={() => navigate('/agenda')} // Redirige a Agenda
         />
         <StatCard 
           title="Total Pacientes" 
@@ -212,7 +204,6 @@ const Dashboard = () => {
           icon={Users} 
           color="bg-ios-blue"
           delay={100}
-          onClick={() => navigate('/patients')} // Redirige a Pacientes
         />
         <StatCard 
           title="Tratamientos Activos" 
@@ -220,7 +211,6 @@ const Dashboard = () => {
           icon={Activity} 
           color="bg-ios-purple"
           delay={150}
-          onClick={() => navigate('/treatments')} // Redirige a Tratamientos
         />
       </div>
 
@@ -299,7 +289,7 @@ const Dashboard = () => {
             title="Nuevo Paciente"
             subtitle="Registrar datos"
             color="bg-ios-green"
-            onClick={() => navigate('/patient/new')} // Ajusta si la ruta es diferente
+            onClick={() => navigate('/patient/new')}
             delay={400}
           />
           
