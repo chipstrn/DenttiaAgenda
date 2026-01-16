@@ -8,8 +8,11 @@ import Login from "./pages/Login";
 import Patients from "./pages/Patients";
 import PatientIntake from "./pages/PatientIntake";
 import PatientAnamnesis from "./pages/PatientAnamnesis";
+import PatientExam from "./pages/PatientExam";
 import Agenda from "./pages/Agenda";
 import Treatments from "./pages/Treatments";
+import Doctors from "./pages/Doctors";
+import Prescriptions from "./pages/Prescriptions";
 import Finance from "./pages/Finance";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -44,7 +47,7 @@ const App = () => (
             </ProtectedRoute>
           } />
           
-          {/* Patient Intake Flow */}
+          {/* Patient Flow */}
           <Route path="/patient/new" element={
             <ProtectedRoute>
               <PatientIntake />
@@ -63,12 +66,32 @@ const App = () => (
             </ProtectedRoute>
           } />
           
+          <Route path="/patient/:patientId/exam" element={
+            <ProtectedRoute>
+              <PatientExam />
+            </ProtectedRoute>
+          } />
+          
+          {/* Clinical */}
           <Route path="/treatments" element={
             <ProtectedRoute>
               <Treatments />
             </ProtectedRoute>
           } />
           
+          <Route path="/doctors" element={
+            <ProtectedRoute>
+              <Doctors />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/prescriptions" element={
+            <ProtectedRoute>
+              <Prescriptions />
+            </ProtectedRoute>
+          } />
+          
+          {/* Admin */}
           <Route path="/finance" element={
             <ProtectedRoute>
               <Finance />

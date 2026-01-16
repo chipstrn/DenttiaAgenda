@@ -1,22 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Edit, Trash2, User, Phone, Mail, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,29 +15,23 @@ interface Patient {
   email: string;
   phone: string;
   date_of_birth: string;
-  address: string;
-  medical_history: string;
   created_at: string;
+}
+
+interface PatientRecord {
+  patient_id: string;
+  reception_completed_at: string | null;
+  doctor_completed_at: string | null;
 }
 
 const Patients = () => {
   const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [records, setRecords] = useState<Record<string, PatientRecord>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    date_of_birth: '',
-    address: '',
-    medical_history: ''
-  });
 
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -62,72 +44,29 @@ const Patients = () => {
 
       if (error) throw error;
       setPatients(data || []);
+
+      // Fetch records status
+      const { data: recordsData } = await supabase
+        .from('patient_records')
+        .select('patient_id, reception_completed_at, doctor_completed_at')
+        .eq('user_id', user.id);
+
+      const recordsMap: Record<string, PatientRecord> = {};
+      recordsData?.forEach(r => {
+        recordsMap[r.patient_id] = r;
+      });
+      setRecords(recordsMap);
     } catch (error) {
       console.error('Error fetching patients:', error);
       toast.error('Error al cargar pacientes');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchPatients();
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      if (editingPatient) {
-        const { error } = await supabase
-          .from('patients')
-          .update(formData)
-          .eq('id', editingPatient.id);
-
-        if (error) throw error;
-        toast.success('Paciente actualizado');
-      } else {
-        const { error } = await supabase
-          .from('patients')
-          .insert({ ...formData, user_id: user.id });
-
-        if (error) throw error;
-        toast.success('Paciente creado');
-      }
-
-      setIsDialogOpen(false);
-      setEditingPatient(null);
-      setFormData({
-        first_name: '',
-        last_name: '',
-        email: '',
-        phone: '',
-        date_of_birth: '',
-        address: '',
-        medical_history: ''
-      });
-      fetchPatients();
-    } catch (error) {
-      console.error('Error saving patient:', error);
-      toast.error('Error al guardar paciente');
-    }
-  };
-
-  const handleEdit = (patient: Patient) => {
-    setEditingPatient(patient);
-    setFormData({
-      first_name: patient.first_name,
-      last_name: patient.last_name,
-      email: patient.email || '',
-      phone: patient.phone || '',
-      date_of_birth: patient.date_of_birth || '',
-      address: patient.address || '',
-      medical_history: patient.medical_history || ''
-    });
-    setIsDialogOpen(true);
-  };
+  }, [fetchPatients]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar este paciente?')) return;
@@ -147,11 +86,23 @@ const Patients = () => {
     }
   };
 
+  const getRecordStatus = (patientId: string) => {
+    const record = records[patientId];
+    if (!record) return 'pending';
+    if (record.doctor_completed_at) return 'complete';
+    if (record.reception_completed_at) return 'reception';
+    return 'pending';
+  };
+
   const filteredPatients = patients.filter(p => 
     `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.phone?.includes(searchTerm)
   );
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  }, []);
 
   return (
     <MainLayout>
@@ -178,9 +129,25 @@ const Patients = () => {
             type="text"
             placeholder="Buscar paciente..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border-0 text-base placeholder:text-ios-gray-400 focus:ring-2 focus:ring-ios-blue/30 focus:outline-none shadow-ios-sm transition-all duration-200"
           />
+        </div>
+      </div>
+
+      {/* Status Legend */}
+      <div className="flex gap-4 mb-4 text-sm animate-fade-in" style={{ animationDelay: '75ms' }}>
+        <div className="flex items-center gap-2">
+          <div className="h-3 w-3 rounded-full bg-ios-gray-300"></div>
+          <span className="text-ios-gray-500">Pendiente</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-3 w-3 rounded-full bg-ios-orange"></div>
+          <span className="text-ios-gray-500">Recepción</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-3 w-3 rounded-full bg-ios-green"></div>
+          <span className="text-ios-gray-500">Completo</span>
         </div>
       </div>
 
@@ -192,62 +159,108 @@ const Patients = () => {
           </div>
         ) : filteredPatients.length > 0 ? (
           <div className="divide-y divide-ios-gray-100">
-            {filteredPatients.map((patient, index) => (
-              <div 
-                key={patient.id}
-                className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in"
-                style={{ animationDelay: `${150 + index * 30}ms` }}
-                onClick={() => navigate(`/patient/${patient.id}/intake`)}
-              >
-                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-semibold">
-                    {patient.first_name[0]}{patient.last_name[0]}
-                  </span>
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-ios-gray-900">
-                    {patient.first_name} {patient.last_name}
-                  </p>
-                  <div className="flex items-center gap-4 mt-1">
-                    {patient.email && (
-                      <span className="flex items-center gap-1 text-sm text-ios-gray-500">
-                        <Mail className="h-3.5 w-3.5" />
-                        {patient.email}
-                      </span>
-                    )}
-                    {patient.phone && (
-                      <span className="flex items-center gap-1 text-sm text-ios-gray-500">
-                        <Phone className="h-3.5 w-3.5" />
-                        {patient.phone}
-                      </span>
+            {filteredPatients.map((patient, index) => {
+              const status = getRecordStatus(patient.id);
+              return (
+                <div 
+                  key={patient.id}
+                  className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in"
+                  style={{ animationDelay: `${150 + index * 30}ms` }}
+                  onClick={() => navigate(`/patient/${patient.id}/intake`)}
+                >
+                  {/* Status Indicator */}
+                  <div className={cn(
+                    "h-3 w-3 rounded-full flex-shrink-0",
+                    status === 'complete' ? 'bg-ios-green' :
+                    status === 'reception' ? 'bg-ios-orange' : 'bg-ios-gray-300'
+                  )} />
+
+                  {/* Avatar */}
+                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-semibold">
+                      {patient.first_name[0]}{patient.last_name[0]}
+                    </span>
+                  </div>
+                  
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-ios-gray-900">
+                      {patient.first_name} {patient.last_name}
+                    </p>
+                    <div className="flex items-center gap-4 mt-1">
+                      {patient.email && (
+                        <span className="flex items-center gap-1 text-sm text-ios-gray-500">
+                          <Mail className="h-3.5 w-3.5" />
+                          <span className="truncate max-w-[150px]">{patient.email}</span>
+                        </span>
+                      )}
+                      {patient.phone && (
+                        <span className="flex items-center gap-1 text-sm text-ios-gray-500">
+                          <Phone className="h-3.5 w-3.5" />
+                          {patient.phone}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className={cn(
+                    "px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5",
+                    status === 'complete' ? 'bg-ios-green/15 text-ios-green' :
+                    status === 'reception' ? 'bg-ios-orange/15 text-ios-orange' : 'bg-ios-gray-100 text-ios-gray-500'
+                  )}>
+                    {status === 'complete' ? (
+                      <>
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Completo
+                      </>
+                    ) : status === 'reception' ? (
+                      <>
+                        <Clock className="h-3.5 w-3.5" />
+                        Falta Doctor
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-3.5 w-3.5" />
+                        Pendiente
+                      </>
                     )}
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/anamnesis`); }}
-                    className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green/20 transition-colors touch-feedback"
-                    title="Anamnesis"
-                  >
-                    <FileText className="h-4 w-4 text-ios-green" />
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/intake`); }}
-                    className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
-                  >
-                    <Edit className="h-4 w-4 text-ios-gray-600" />
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleDelete(patient.id); }}
-                    className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
-                  >
-                    <Trash2 className="h-4 w-4 text-ios-red" />
-                  </button>
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/exam`); }}
+                      className="h-10 w-10 rounded-xl bg-ios-purple/10 flex items-center justify-center hover:bg-ios-purple/20 transition-colors touch-feedback"
+                      title="Odontograma"
+                    >
+                      <Stethoscope className="h-4 w-4 text-ios-purple" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/anamnesis`); }}
+                      className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green/20 transition-colors touch-feedback"
+                      title="Anamnesis (Doctor)"
+                    >
+                      <FileText className="h-4 w-4 text-ios-green" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/intake`); }}
+                      className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
+                      title="Editar (Recepción)"
+                    >
+                      <Edit className="h-4 w-4 text-ios-gray-600" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(patient.id); }}
+                      className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="h-4 w-4 text-ios-red" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-16">
