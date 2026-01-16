@@ -1,10 +1,3 @@
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext'; // Si usas el botón de salir
-const MainLayout = ({ children }: MainLayoutProps) => {
-  const navigate = useNavigate(); // <--- ESTA LÍNEA ES LA CLAVE
-  const { signOut } = useAuth(); // <--- Solo si vas a configurar el botón de salir
-
-  // ... resto de tu código
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -82,12 +75,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             <button className="h-10 w-10 rounded-xl bg-ios-blue flex items-center justify-center shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback">
               <Plus className="h-5 w-5 text-white" />
             </button>
-<button 
-  onClick={() => navigate('/agenda')} // <--- AGREGA ESTO
-  className="..." // (Deja tus clases de estilo intactas)
->
-  <Plus className="..." />
-</button>
+
             {/* Notifications */}
             <button className="h-10 w-10 rounded-xl bg-white/80 flex items-center justify-center shadow-ios-sm hover:bg-white transition-all duration-200 touch-feedback relative">
               <Bell className="h-5 w-5 text-ios-gray-600" />
@@ -95,17 +83,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             </button>
             
             {/* Profile */}
-            <div 
-  onClick={async () => {
-    if(window.confirm('¿Cerrar sesión?')) {
-      await signOut();
-      navigate('/login');
-    }
-  }}
-  className="..." // Tus estilos originales (cursor-pointer, etc)
->
-  {/* Tu Avatar/Imagen */}
-</div>
             <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-semibold text-ios-gray-900">{displayName}</p>
