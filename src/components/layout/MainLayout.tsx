@@ -82,7 +82,12 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             <button className="h-10 w-10 rounded-xl bg-ios-blue flex items-center justify-center shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback">
               <Plus className="h-5 w-5 text-white" />
             </button>
-
+<button 
+  onClick={() => navigate('/agenda')} // <--- AGREGA ESTO
+  className="..." // (Deja tus clases de estilo intactas)
+>
+  <Plus className="..." />
+</button>
             {/* Notifications */}
             <button className="h-10 w-10 rounded-xl bg-white/80 flex items-center justify-center shadow-ios-sm hover:bg-white transition-all duration-200 touch-feedback relative">
               <Bell className="h-5 w-5 text-ios-gray-600" />
