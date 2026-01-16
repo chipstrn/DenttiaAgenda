@@ -12,18 +12,18 @@ import {
 } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Stethoscope, Edit, Trash2, Phone, Mail, Loader2 } from 'lucide-react';
+import { Plus, Stethoscope, Edit, Trash2, Phone, Mail, Award, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 interface Doctor {
   id: string;
-  first_name: string;
-  last_name: string;
-  specialty: string;
-  phone: string;
-  email: string;
-  license_number: string;
+  full_name: string;
+  specialty: string | null;
+  professional_license: string | null;
+  university: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
   is_active: boolean;
 }
 
@@ -47,21 +47,21 @@ const Doctors = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   
-  // Individual form states
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  // Form states
+  const [fullName, setFullName] = useState('');
   const [specialty, setSpecialty] = useState('');
+  const [professionalLicense, setProfessionalLicense] = useState('');
+  const [university, setUniversity] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [licenseNumber, setLicenseNumber] = useState('');
+  const [address, setAddress] = useState('');
 
   const fetchDoctors = useCallback(async () => {
     try {
-      // Fetch ALL doctors (shared data)
       const { data, error } = await supabase
         .from('doctors')
         .select('*')
-        .order('first_name', { ascending: true });
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
       setDoctors(data || []);
@@ -78,12 +78,13 @@ const Doctors = () => {
   }, [fetchDoctors]);
 
   const resetForm = useCallback(() => {
-    setFirstName('');
-    setLastName('');
+    setFullName('');
     setSpecialty('');
+    setProfessionalLicense('');
+    setUniversity('');
     setPhone('');
     setEmail('');
-    setLicenseNumber('');
+    setAddress('');
     setEditingDoctor(null);
   }, []);
 
@@ -91,15 +92,21 @@ const Doctors = () => {
     e.preventDefault();
     if (!user?.id) return;
 
+    if (!fullName.trim()) {
+      toast.error('El nombre es requerido');
+      return;
+    }
+
     setSaving(true);
     try {
       const doctorData = {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        specialty,
-        phone: phone.trim(),
-        email: email.trim(),
-        license_number: licenseNumber.trim(),
+        full_name: fullName.trim(),
+        specialty: specialty || null,
+        professional_license: professionalLicense.trim() || null,
+        university: university.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        address: address.trim() || null,
         is_active: true
       };
 
@@ -133,12 +140,13 @@ const Doctors = () => {
 
   const handleEdit = useCallback((doctor: Doctor) => {
     setEditingDoctor(doctor);
-    setFirstName(doctor.first_name || '');
-    setLastName(doctor.last_name || '');
+    setFullName(doctor.full_name || '');
     setSpecialty(doctor.specialty || '');
+    setProfessionalLicense(doctor.professional_license || '');
+    setUniversity(doctor.university || '');
     setPhone(doctor.phone || '');
     setEmail(doctor.email || '');
-    setLicenseNumber(doctor.license_number || '');
+    setAddress(doctor.address || '');
     setIsDialogOpen(true);
   }, []);
 
@@ -160,6 +168,15 @@ const Doctors = () => {
       toast.error('Error al eliminar');
     }
   }, []);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
 
   return (
     <MainLayout>
@@ -194,7 +211,7 @@ const Doctors = () => {
               <div className="flex items-start justify-between mb-4">
                 <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-ios-indigo to-ios-purple flex items-center justify-center">
                   <span className="text-white font-bold text-lg">
-                    {doctor.first_name?.[0]}{doctor.last_name?.[0]}
+                    {getInitials(doctor.full_name)}
                   </span>
                 </div>
                 <div className="flex gap-1">
@@ -214,7 +231,7 @@ const Doctors = () => {
               </div>
               
               <h3 className="font-bold text-ios-gray-900 text-lg">
-                Dr. {doctor.first_name} {doctor.last_name}
+                {doctor.full_name}
               </h3>
               {doctor.specialty && (
                 <span className="inline-block px-2.5 py-1 rounded-lg bg-ios-indigo/10 text-ios-indigo text-xs font-semibold mt-2">
@@ -223,6 +240,12 @@ const Doctors = () => {
               )}
               
               <div className="mt-4 space-y-2">
+                {doctor.professional_license && (
+                  <div className="flex items-center gap-2 text-sm text-ios-gray-500">
+                    <Award className="h-4 w-4" />
+                    Cédula: {doctor.professional_license}
+                  </div>
+                )}
                 {doctor.phone && (
                   <div className="flex items-center gap-2 text-sm text-ios-gray-500">
                     <Phone className="h-4 w-4" />
@@ -233,12 +256,6 @@ const Doctors = () => {
                   <div className="flex items-center gap-2 text-sm text-ios-gray-500">
                     <Mail className="h-4 w-4" />
                     <span className="truncate">{doctor.email}</span>
-                  </div>
-                )}
-                {doctor.license_number && (
-                  <div className="flex items-center gap-2 text-sm text-ios-gray-500">
-                    <Stethoscope className="h-4 w-4" />
-                    Cédula: {doctor.license_number}
                   </div>
                 )}
               </div>
@@ -266,39 +283,27 @@ const Doctors = () => {
         setIsDialogOpen(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-bold text-ios-gray-900">
               {editingDoctor ? 'Editar Doctor' : 'Nuevo Doctor'}
             </DialogTitle>
             <DialogDescription className="text-ios-gray-500">
-              {editingDoctor ? 'Modifica los datos' : 'Agrega un profesional'}
+              {editingDoctor ? 'Modifica los datos del doctor' : 'Agrega un profesional al equipo'}
             </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit}>
             <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Nombre"
-                    required
-                    className="ios-input"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Apellido *</Label>
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Apellido"
-                    required
-                    className="ios-input"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Nombre Completo *</Label>
+                <input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Dr. Juan Pérez García"
+                  required
+                  className="ios-input"
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Especialidad</Label>
@@ -307,19 +312,39 @@ const Doctors = () => {
                   onChange={(e) => setSpecialty(e.target.value)}
                   className="ios-input"
                 >
-                  <option value="">Seleccionar</option>
+                  <option value="">Seleccionar especialidad</option>
                   {specialties.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Cédula Profesional</Label>
+                  <input
+                    value={professionalLicense}
+                    onChange={(e) => setProfessionalLicense(e.target.value)}
+                    placeholder="12345678"
+                    className="ios-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(238) 123-4567"
+                    className="ios-input"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
+                <Label className="text-sm font-medium text-ios-gray-600">Universidad</Label>
                 <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(000) 000-0000"
+                  value={university}
+                  onChange={(e) => setUniversity(e.target.value)}
+                  placeholder="Universidad de origen"
                   className="ios-input"
                 />
               </div>
@@ -334,11 +359,11 @@ const Doctors = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Cédula Profesional</Label>
+                <Label className="text-sm font-medium text-ios-gray-600">Dirección</Label>
                 <input
-                  value={licenseNumber}
-                  onChange={(e) => setLicenseNumber(e.target.value)}
-                  placeholder="Número de cédula"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Dirección del consultorio"
                   className="ios-input"
                 />
               </div>

@@ -37,8 +37,8 @@ interface Prescription {
     last_name: string;
   };
   doctors?: {
-    first_name: string;
-    last_name: string;
+    full_name: string;
+    specialty: string;
   };
 }
 
@@ -50,8 +50,8 @@ interface Patient {
 
 interface Doctor {
   id: string;
-  first_name: string;
-  last_name: string;
+  full_name: string;
+  specialty: string;
 }
 
 const Prescriptions = () => {
@@ -64,7 +64,6 @@ const Prescriptions = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Individual form states
   const [patientId, setPatientId] = useState('');
   const [doctorId, setDoctorId] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
@@ -73,11 +72,10 @@ const Prescriptions = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch ALL data (shared)
       const [prescriptionsResult, patientsResult, doctorsResult] = await Promise.all([
         supabase
           .from('prescriptions')
-          .select('*, patients(first_name, last_name), doctors(first_name, last_name)')
+          .select('*, patients(first_name, last_name), doctors(full_name, specialty)')
           .order('created_at', { ascending: false }),
         supabase
           .from('patients')
@@ -85,8 +83,9 @@ const Prescriptions = () => {
           .order('first_name', { ascending: true }),
         supabase
           .from('doctors')
-          .select('id, first_name, last_name')
-          .order('first_name', { ascending: true })
+          .select('id, full_name, specialty')
+          .eq('is_active', true)
+          .order('full_name', { ascending: true })
       ]);
 
       if (prescriptionsResult.error) throw prescriptionsResult.error;
@@ -133,9 +132,7 @@ const Prescriptions = () => {
           user_id: user.id,
           patient_id: patientId,
           doctor_id: doctorId,
-          diagnosis: diagnosis.trim(),
-          medications: medications.trim(),
-          instructions: instructions.trim()
+          observations: `${diagnosis}\n\n${medications}\n\n${instructions}`.trim()
         });
 
       if (error) throw error;
@@ -188,7 +185,7 @@ const Prescriptions = () => {
         <div class="info">
           <div class="info-block">
             <label>Paciente:</label>
-            <p>${prescription.patients?.first_name} ${prescription.patients?.last_name}</p>
+            <p>${prescription.patients?.first_name || ''} ${prescription.patients?.last_name || ''}</p>
           </div>
           <div class="info-block">
             <label>Fecha:</label>
@@ -196,28 +193,15 @@ const Prescriptions = () => {
           </div>
         </div>
         
-        ${prescription.diagnosis ? `
         <div class="section">
-          <h3>Diagnóstico</h3>
-          <p>${prescription.diagnosis}</p>
+          <h3>Prescripción</h3>
+          <p>${prescription.observations || prescription.medications || 'No especificado'}</p>
         </div>
-        ` : ''}
-        
-        <div class="section">
-          <h3>Medicamentos</h3>
-          <p>${prescription.medications || 'No especificado'}</p>
-        </div>
-        
-        ${prescription.instructions ? `
-        <div class="section">
-          <h3>Indicaciones</h3>
-          <p>${prescription.instructions}</p>
-        </div>
-        ` : ''}
         
         <div class="footer">
           <div class="signature">
-            <p>Dr. ${prescription.doctors?.first_name} ${prescription.doctors?.last_name}</p>
+            <p>${prescription.doctors?.full_name || 'Doctor'}</p>
+            ${prescription.doctors?.specialty ? `<p style="font-size: 12px; color: #666;">${prescription.doctors.specialty}</p>` : ''}
           </div>
         </div>
       </body>
@@ -232,7 +216,8 @@ const Prescriptions = () => {
   const filteredPrescriptions = prescriptions.filter(p => {
     if (!searchTerm) return true;
     const patientName = `${p.patients?.first_name || ''} ${p.patients?.last_name || ''}`.toLowerCase();
-    return patientName.includes(searchTerm.toLowerCase());
+    const doctorName = (p.doctors?.full_name || '').toLowerCase();
+    return patientName.includes(searchTerm.toLowerCase()) || doctorName.includes(searchTerm.toLowerCase());
   });
 
   return (
@@ -258,7 +243,7 @@ const Prescriptions = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por paciente..."
+            placeholder="Buscar por paciente o doctor..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border-0 text-base placeholder:text-ios-gray-400 focus:ring-2 focus:ring-ios-pink/30 focus:outline-none shadow-ios-sm transition-all duration-200"
@@ -289,13 +274,8 @@ const Prescriptions = () => {
                     {prescription.patients?.first_name} {prescription.patients?.last_name}
                   </p>
                   <p className="text-sm text-ios-gray-500">
-                    Dr. {prescription.doctors?.first_name} {prescription.doctors?.last_name}
+                    {prescription.doctors?.full_name || 'Sin doctor asignado'}
                   </p>
-                  {prescription.diagnosis && (
-                    <p className="text-sm text-ios-gray-400 truncate mt-1">
-                      {prescription.diagnosis}
-                    </p>
-                  )}
                 </div>
 
                 <div className="text-right">
@@ -370,7 +350,7 @@ const Prescriptions = () => {
                     <SelectContent className="rounded-xl max-h-[200px]">
                       {doctors.map((doctor) => (
                         <SelectItem key={doctor.id} value={doctor.id}>
-                          Dr. {doctor.first_name} {doctor.last_name}
+                          {doctor.full_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
