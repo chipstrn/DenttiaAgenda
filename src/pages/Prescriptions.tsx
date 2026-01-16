@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { CLINIC_CONFIG } from '@/config/clinic';
 import { Plus, FileText, Printer, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -28,9 +29,7 @@ interface Prescription {
   id: string;
   patient_id: string;
   doctor_id: string;
-  medications: string;
-  instructions: string;
-  diagnosis: string;
+  observations: string;
   created_at: string;
   patients?: {
     first_name: string;
@@ -172,14 +171,15 @@ const Prescriptions = () => {
           .section p { white-space: pre-wrap; line-height: 1.6; }
           .footer { margin-top: 50px; text-align: center; }
           .signature { margin-top: 60px; border-top: 1px solid #333; width: 200px; margin-left: auto; margin-right: auto; padding-top: 10px; }
+          .clinic-info { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 12px; color: #666; }
           @media print { body { padding: 20px; } }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>Denttia</h1>
-          <p>Clínica Dental - Tehuacán, Puebla</p>
-          <p>Tel: (238) 123-4567</p>
+          <h1>${CLINIC_CONFIG.name}</h1>
+          <p>${CLINIC_CONFIG.locations.tehuacan.address}</p>
+          <p>Tel: ${CLINIC_CONFIG.phone} | WhatsApp: ${CLINIC_CONFIG.whatsappDisplay}</p>
         </div>
         
         <div class="info">
@@ -195,7 +195,7 @@ const Prescriptions = () => {
         
         <div class="section">
           <h3>Prescripción</h3>
-          <p>${prescription.observations || prescription.medications || 'No especificado'}</p>
+          <p>${prescription.observations || 'No especificado'}</p>
         </div>
         
         <div class="footer">
@@ -203,6 +203,11 @@ const Prescriptions = () => {
             <p>${prescription.doctors?.full_name || 'Doctor'}</p>
             ${prescription.doctors?.specialty ? `<p style="font-size: 12px; color: #666;">${prescription.doctors.specialty}</p>` : ''}
           </div>
+        </div>
+        
+        <div class="clinic-info">
+          <p><strong>Horarios:</strong> ${CLINIC_CONFIG.scheduleText.weekdays}</p>
+          <p>${CLINIC_CONFIG.scheduleText.saturday} | ${CLINIC_CONFIG.scheduleText.sunday}</p>
         </div>
       </body>
       </html>
