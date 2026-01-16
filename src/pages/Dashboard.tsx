@@ -1,252 +1,323 @@
-import React, { useEffect, useState } from 'react';
+"use client";
+
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
+import { Users, Calendar, DollarSign, Activity, TrendingUp, Clock, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Users, Calendar, DollarSign, Activity, 
-  ArrowUpRight, ArrowDownRight, Clock, CheckCircle2 
-} from 'lucide-react';
-import { format } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
+import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Link } from 'react-router-dom'; // <--- USAMOS LINK EN LUGAR DE USENAVIGATE
+import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
-interface DashboardStats {
-  totalPatients: number;
-  todayAppointments: number;
-  monthlyIncome: number;
-  pendingBalance: number;
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: string;
+  delay?: number;
 }
 
-interface Appointment {
-  id: string;
-  patient_id: string;
-  doctor_id: string;
-  appointment_date: string;
-  start_time: string;
-  end_time: string;
+const StatCard = ({ title, value, icon: Icon, color, delay = 0 }: StatCardProps) => (
+  <div 
+    className="ios-card p-5 animate-slide-up"
+    style={{ animationDelay: `${delay}ms` }}
+  >
+    <div className="flex items-start justify-between mb-4">
+      <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", color)}>
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+    </div>
+    <p className="text-2xl font-bold text-ios-gray-900 tracking-tight">{value}</p>
+    <p className="text-sm text-ios-gray-500 font-medium mt-1">{title}</p>
+  </div>
+);
+
+interface AppointmentItemProps {
+  time: string;
+  patient: string;
+  treatment: string;
   status: string;
-  patients: {
-    first_name: string;
-    last_name: string;
-  };
+  delay?: number;
+  onClick?: () => void;
 }
 
-const Dashboard = () => {
-  // Ya no necesitamos useNavigate para las tarjetas principales
-  const [stats, setStats] = useState<DashboardStats>({
-    totalPatients: 0,
-    todayAppointments: 0,
-    monthlyIncome: 0,
-    pendingBalance: 0
-  });
-  const [todayAppointmentsList, setTodayAppointmentsList] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchDashboardData = async () => {
-    try {
-      const { count: patientsCount } = await supabase
-        .from('patients')
-        .select('*', { count: 'exact', head: true });
-
-      const today = new Date().toISOString().split('T')[0];
-      const { count: appointmentsCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('appointment_date', today);
-
-      const { data: appointmentsData } = await supabase
-        .from('appointments')
-        .select('*, patients (first_name, last_name)')
-        .eq('appointment_date', today)
-        .order('start_time', { ascending: true });
-
-      setStats({
-        totalPatients: patientsCount || 0,
-        todayAppointments: appointmentsCount || 0,
-        monthlyIncome: 0, 
-        pendingBalance: 0
-      });
-
-      setTodayAppointmentsList(appointmentsData || []);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-    } finally {
-      setLoading(false);
+const AppointmentItem = ({ time, patient, treatment, status, delay = 0, onClick }: AppointmentItemProps) => {
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'bg-ios-green/15 text-ios-green';
+      case 'in-progress': return 'bg-ios-blue/15 text-ios-blue';
+      case 'completed': return 'bg-ios-gray-200 text-ios-gray-600';
+      case 'cancelled': return 'bg-ios-red/15 text-ios-red';
+      default: return 'bg-ios-orange/15 text-ios-orange';
     }
   };
 
-  useEffect(() => {
-    fetchDashboardData();
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'Confirmada';
+      case 'in-progress': return 'En Sala';
+      case 'completed': return 'Completada';
+      case 'cancelled': return 'Cancelada';
+      default: return 'Agendada';
+    }
+  };
 
-    // SUSCRIPCIÓN REALTIME (Para que los recordatorios se actualicen solos)
-    const channel = supabase
-      .channel('dashboard-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
-        fetchDashboardData();
-      })
-      .subscribe();
+  return (
+    <div 
+      onClick={onClick}
+      className="flex items-center gap-4 p-4 rounded-2xl hover:bg-ios-gray-100 transition-all duration-200 ease-ios cursor-pointer touch-feedback animate-slide-up"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="w-14 text-center">
+        <p className="text-base font-bold text-ios-gray-900">{time}</p>
+      </div>
+      <div className="h-10 w-1 rounded-full bg-ios-blue"></div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-ios-gray-900 truncate">{patient}</p>
+        <p className="text-sm text-ios-gray-500 truncate">{treatment}</p>
+      </div>
+      <div className={cn(
+        "px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap",
+        getStatusStyle(status)
+      )}>
+        {getStatusLabel(status)}
+      </div>
+      <ChevronRight className="h-5 w-5 text-ios-gray-300 flex-shrink-0" />
+    </div>
+  );
+};
 
-    return () => { supabase.removeChannel(channel); };
+const QuickAction = ({ icon: Icon, title, subtitle, color, onClick, delay = 0 }: any) => (
+  <button 
+    onClick={onClick}
+    className="flex items-center gap-4 w-full p-4 rounded-2xl bg-white hover:bg-ios-gray-50 transition-all duration-200 ease-ios touch-feedback shadow-ios-sm animate-slide-up"
+    style={{ animationDelay: `${delay}ms` }}
+  >
+    <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center", color)}>
+      <Icon className="h-6 w-6 text-white" />
+    </div>
+    <div className="text-left flex-1">
+      <p className="font-semibold text-ios-gray-900">{title}</p>
+      <p className="text-sm text-ios-gray-500">{subtitle}</p>
+    </div>
+    <ChevronRight className="h-5 w-5 text-ios-gray-300" />
+  </button>
+);
+
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  const [stats, setStats] = useState({
+    patientsCount: 0,
+    appointmentsToday: 0,
+    monthlyRevenue: 0,
+    activeTreatments: 0
+  });
+  const [todaysAppointments, setTodaysAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const today = new Date();
+      const dayStart = startOfDay(today).toISOString();
+      const dayEnd = endOfDay(today).toISOString();
+      const monthStart = startOfMonth(today).toISOString();
+
+      // Fetch ALL data (shared across clinic)
+      const [
+        patientsResult,
+        appointmentsResult,
+        paymentsResult,
+        treatmentsResult
+      ] = await Promise.all([
+        supabase
+          .from('patients')
+          .select('id', { count: 'exact', head: true }),
+        supabase
+          .from('appointments')
+          .select('*, patients(first_name, last_name)')
+          .gte('start_time', dayStart)
+          .lte('start_time', dayEnd)
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('payments')
+          .select('amount')
+          .eq('status', 'completed')
+          .gte('created_at', monthStart),
+        supabase
+          .from('treatments')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+      ]);
+
+      const monthlyRevenue = paymentsResult.data?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+
+      setStats({
+        patientsCount: patientsResult.count || 0,
+        appointmentsToday: appointmentsResult.data?.length || 0,
+        monthlyRevenue,
+        activeTreatments: treatmentsResult.count || 0
+      });
+
+      setTodaysAppointments(appointmentsResult.data || []);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   return (
     <MainLayout>
+      {/* Header */}
       <div className="mb-8 animate-fade-in">
-        <h1 className="text-2xl font-bold text-gray-900">Panel Principal</h1>
-        <p className="text-gray-500">
-          Resumen del día - {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
+        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Dashboard</h1>
+        <p className="text-ios-gray-500 mt-1 font-medium">
+          {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
         </p>
       </div>
 
-      {/* Grid de Tarjetas - AHORA USANDO <LINK> PARA NAVEGACIÓN INFALIBLE */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        
-        {/* 1. RECUADRO AZUL - PACIENTES */}
-        <Link 
-          to="/patients" // <--- RUTA DIRECTA
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
-              <Users className="h-6 w-6 text-blue-600" />
-            </div>
-            <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              <ArrowUpRight className="h-3 w-3 mr-1" /> Ver todos
-            </span>
-          </div>
-          <h3 className="text-gray-500 text-sm font-medium">Total Pacientes</h3>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalPatients}</p>
-        </Link>
-
-        {/* 2. RECUADRO NARANJA - AGENDA DE HOY */}
-        <Link 
-          to="/agenda" 
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-orange-50 rounded-xl group-hover:bg-orange-100 transition-colors">
-              <Calendar className="h-6 w-6 text-orange-600" />
-            </div>
-            <span className="flex items-center text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
-              Hoy
-            </span>
-          </div>
-          <h3 className="text-gray-500 text-sm font-medium">Citas para Hoy</h3>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{stats.todayAppointments}</p>
-        </Link>
-
-        {/* 3. RECUADRO VERDE - FINANZAS (INGRESOS) */}
-        <Link 
-          to="/finance-audit" 
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-            <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              <ArrowUpRight className="h-3 w-3 mr-1" /> Auditoría
-            </span>
-          </div>
-          <h3 className="text-gray-500 text-sm font-medium">Ingresos Mes</h3>
-          <p className="text-2xl font-bold text-gray-900 mt-1">$0.00</p>
-        </Link>
-
-        {/* 4. RECUADRO ROJO - PENDIENTES (AHORA SÍ FUNCIONA) */}
-        <Link 
-          to="/finance" 
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-red-50 rounded-xl group-hover:bg-red-100 transition-colors">
-              <Activity className="h-6 w-6 text-red-600" />
-            </div>
-            <span className="flex items-center text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">
-              <ArrowDownRight className="h-3 w-3 mr-1" /> Ver detalles
-            </span>
-          </div>
-          <h3 className="text-gray-500 text-sm font-medium">Por Cobrar</h3>
-          <p className="text-2xl font-bold text-gray-900 mt-1">$0.00</p>
-        </Link>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <StatCard 
+          title="Ingresos del Mes" 
+          value={`$${stats.monthlyRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+          icon={DollarSign} 
+          color="bg-ios-green"
+          delay={0}
+        />
+        <StatCard 
+          title="Citas Hoy" 
+          value={stats.appointmentsToday}
+          icon={Calendar} 
+          color="bg-ios-orange"
+          delay={50}
+        />
+        <StatCard 
+          title="Total Pacientes" 
+          value={stats.patientsCount}
+          icon={Users} 
+          color="bg-ios-blue"
+          delay={100}
+        />
+        <StatCard 
+          title="Tratamientos Activos" 
+          value={stats.activeTreatments}
+          icon={Activity} 
+          color="bg-ios-purple"
+          delay={150}
+        />
       </div>
 
-      {/* SECCIÓN INFERIOR - RECORDATORIOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-gray-900">Recordatorios de Hoy</h2>
-            <Link 
-              to="/agenda"
-              className="text-sm text-blue-600 font-medium hover:text-blue-700 hover:bg-blue-50 px-3 py-1 rounded-full transition-colors"
-            >
-              Ver Agenda Completa
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            {loading ? (
-              <p className="text-gray-400 text-center py-4">Cargando citas...</p>
-            ) : todayAppointmentsList.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <p className="text-gray-500">No hay citas programadas para hoy</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Today's Appointments */}
+        <div className="lg:col-span-2">
+          <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <div className="flex items-center justify-between p-5 pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-ios-gray-900">Citas de Hoy</h2>
+                <p className="text-sm text-ios-gray-500">{stats.appointmentsToday} citas programadas</p>
               </div>
-            ) : (
-              todayAppointmentsList.map((appointment) => (
-                <Link 
-                  to={`/agenda?focus=${appointment.id}`}
-                  key={appointment.id} 
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl border border-gray-100 transition-colors group cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`
-                      h-12 w-12 rounded-full flex items-center justify-center
-                      ${appointment.status === 'completed' ? 'bg-green-100 text-green-600' : 
-                        appointment.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                        'bg-blue-100 text-blue-600'}
-                    `}>
-                      {appointment.status === 'completed' ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-900">
-                        {appointment.patients?.first_name} {appointment.patients?.last_name}
-                      </h4>
-                      <div className="flex items-center gap-3 text-sm text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {appointment.start_time.slice(0, 5)} - {appointment.end_time.slice(0, 5)}
-                        </span>
-                        <span className={`
-                          px-2 py-0.5 rounded-full text-xs font-medium capitalize
-                          ${appointment.status === 'completed' ? 'bg-green-100 text-green-700' : 
-                            appointment.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                            'bg-yellow-100 text-yellow-700'}
-                        `}>
-                          {appointment.status === 'confirmed' ? 'Pendiente' : 
-                           appointment.status === 'completed' ? 'Completada' : appointment.status}
-                        </span>
-                      </div>
-                    </div>
+              <button 
+                onClick={() => navigate('/agenda')}
+                className="flex items-center gap-1 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity touch-feedback"
+              >
+                Ver todas
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <div className="px-2 pb-3">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
+                </div>
+              ) : todaysAppointments.length > 0 ? (
+                <div className="space-y-1">
+                  {todaysAppointments.slice(0, 5).map((apt, index) => (
+                    <AppointmentItem 
+                      key={apt.id}
+                      time={format(new Date(apt.start_time), 'HH:mm')} 
+                      patient={`${apt.patients?.first_name || ''} ${apt.patients?.last_name || ''}`.trim() || 'Sin paciente'} 
+                      treatment={apt.title || 'Sin título'} 
+                      status={apt.status}
+                      delay={250 + (index * 50)}
+                      onClick={() => navigate('/agenda')}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="h-16 w-16 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <Calendar className="h-8 w-8 text-ios-gray-400" />
                   </div>
-                </Link>
-              ))
-            )}
+                  <p className="text-ios-gray-500 font-medium">No hay citas para hoy</p>
+                  <button 
+                    onClick={() => navigate('/agenda')}
+                    className="mt-3 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
+                  >
+                    Agendar una cita
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Panel Lateral - Estado del Sistema */}
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-lg p-6 text-white h-fit">
-          <h3 className="font-bold text-lg mb-2">Estado del Sistema</h3>
-          <p className="text-blue-100 text-sm mb-6">Todo funcionando correctamente.</p>
+        {/* Quick Actions */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-bold text-ios-gray-900 animate-fade-in" style={{ animationDelay: '300ms' }}>
+            Acciones Rápidas
+          </h2>
           
-          <div className="space-y-4">
-            <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-              <p className="text-xs text-blue-200 uppercase tracking-wider font-semibold mb-1">Versión</p>
-              <p className="font-mono">v1.0.3 (Live)</p>
-            </div>
-            <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-              <p className="text-xs text-blue-200 uppercase tracking-wider font-semibold mb-1">Base de Datos</p>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse" />
-                <p>Conectado (Realtime)</p>
+          <QuickAction 
+            icon={Plus}
+            title="Nueva Cita"
+            subtitle="Agendar paciente"
+            color="bg-ios-blue"
+            onClick={() => navigate('/agenda')}
+            delay={350}
+          />
+          
+          <QuickAction 
+            icon={Users}
+            title="Nuevo Paciente"
+            subtitle="Registrar datos"
+            color="bg-ios-green"
+            onClick={() => navigate('/patient/new')}
+            delay={400}
+          />
+          
+          {isAdmin && (
+            <QuickAction 
+              icon={DollarSign}
+              title="Registrar Pago"
+              subtitle="Cobro rápido"
+              color="bg-ios-teal"
+              onClick={() => navigate('/finance')}
+              delay={450}
+            />
+          )}
+
+          {/* Reminder Card */}
+          <div 
+            className="p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20 animate-slide-up"
+            style={{ animationDelay: '500ms' }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-ios-orange/20 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-5 w-5 text-ios-orange" />
+              </div>
+              <div>
+                <p className="font-semibold text-ios-gray-900 text-sm">Recordatorio</p>
+                <p className="text-sm text-ios-gray-600 mt-0.5">
+                  Tienes {stats.appointmentsToday} citas pendientes para hoy
+                </p>
               </div>
             </div>
           </div>
