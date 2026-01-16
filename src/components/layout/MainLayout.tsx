@@ -95,6 +95,17 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             </button>
             
             {/* Profile */}
+            <div 
+  onClick={async () => {
+    if(window.confirm('¿Cerrar sesión?')) {
+      await signOut();
+      navigate('/login');
+    }
+  }}
+  className="..." // Tus estilos originales (cursor-pointer, etc)
+>
+  {/* Tu Avatar/Imagen */}
+</div>
             <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-semibold text-ios-gray-900">{displayName}</p>
