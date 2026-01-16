@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import {
@@ -18,7 +18,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Edit, Trash2, Activity, Clock, DollarSign } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Plus, Search, Edit, Trash2, Activity, Clock, DollarSign, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +31,7 @@ interface Treatment {
   base_price: number;
   duration_minutes: number;
   is_active: boolean;
+  user_id: string;
 }
 
 const categories = [
@@ -57,30 +59,28 @@ const categoryColors: Record<string, string> = {
 };
 
 const Treatments = () => {
+  const { user } = useAuth();
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    category: '',
-    base_price: '',
-    duration_minutes: '30',
-    is_active: true
-  });
+  
+  // Individual form states
+  const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formCategory, setFormCategory] = useState('');
+  const [formBasePrice, setFormBasePrice] = useState('');
+  const [formDuration, setFormDuration] = useState('30');
 
-  const fetchTreatments = async () => {
+  const fetchTreatments = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
+      // Fetch ALL treatments (shared data)
       const { data, error } = await supabase
         .from('treatments')
         .select('*')
-        .eq('user_id', user.id)
         .order('name', { ascending: true });
 
       if (error) throw error;
@@ -91,25 +91,34 @@ const Treatments = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchTreatments();
+  }, [fetchTreatments]);
+
+  const resetForm = useCallback(() => {
+    setFormName('');
+    setFormDescription('');
+    setFormCategory('');
+    setFormBasePrice('');
+    setFormDuration('30');
+    setEditingTreatment(null);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    if (!user?.id) return;
 
+    setSaving(true);
+    try {
       const treatmentData = {
-        name: formData.name,
-        description: formData.description,
-        category: formData.category,
-        base_price: parseFloat(formData.base_price) || 0,
-        duration_minutes: parseInt(formData.duration_minutes) || 30,
-        is_active: formData.is_active
+        name: formName,
+        description: formDescription,
+        category: formCategory,
+        base_price: parseFloat(formBasePrice) || 0,
+        duration_minutes: parseInt(formDuration) || 30,
+        is_active: true
       };
 
       if (editingTreatment) {
@@ -130,36 +139,27 @@ const Treatments = () => {
       }
 
       setIsDialogOpen(false);
-      setEditingTreatment(null);
-      setFormData({
-        name: '',
-        description: '',
-        category: '',
-        base_price: '',
-        duration_minutes: '30',
-        is_active: true
-      });
+      resetForm();
       fetchTreatments();
     } catch (error) {
       console.error('Error saving treatment:', error);
       toast.error('Error al guardar tratamiento');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleEdit = (treatment: Treatment) => {
+  const handleEdit = useCallback((treatment: Treatment) => {
     setEditingTreatment(treatment);
-    setFormData({
-      name: treatment.name,
-      description: treatment.description || '',
-      category: treatment.category || '',
-      base_price: treatment.base_price?.toString() || '',
-      duration_minutes: treatment.duration_minutes?.toString() || '30',
-      is_active: treatment.is_active
-    });
+    setFormName(treatment.name);
+    setFormDescription(treatment.description || '');
+    setFormCategory(treatment.category || '');
+    setFormBasePrice(treatment.base_price?.toString() || '');
+    setFormDuration(treatment.duration_minutes?.toString() || '30');
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!confirm('¿Eliminar este tratamiento?')) return;
     
     try {
@@ -169,13 +169,14 @@ const Treatments = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
+      setTreatments(prev => prev.filter(t => t.id !== id));
       toast.success('Tratamiento eliminado');
-      fetchTreatments();
     } catch (error) {
       console.error('Error deleting treatment:', error);
       toast.error('Error al eliminar');
     }
-  };
+  }, []);
 
   const filteredTreatments = treatments.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -189,7 +190,7 @@ const Treatments = () => {
       <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Tratamientos</h1>
-          <p className="text-ios-gray-500 mt-1 font-medium">Catálogo de servicios</p>
+          <p className="text-ios-gray-500 mt-1 font-medium">{treatments.length} servicios en catálogo</p>
         </div>
         <button 
           onClick={() => setIsDialogOpen(true)}
@@ -228,7 +229,7 @@ const Treatments = () => {
       {/* Treatments Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="h-8 w-8 border-3 border-ios-purple/30 border-t-ios-purple rounded-full animate-spin"></div>
+          <Loader2 className="h-8 w-8 animate-spin text-ios-purple" />
         </div>
       ) : filteredTreatments.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -306,17 +307,7 @@ const Treatments = () => {
       {/* Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         setIsDialogOpen(open);
-        if (!open) {
-          setEditingTreatment(null);
-          setFormData({
-            name: '',
-            description: '',
-            category: '',
-            base_price: '',
-            duration_minutes: '30',
-            is_active: true
-          });
-        }
+        if (!open) resetForm();
       }}>
         <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
@@ -333,8 +324,8 @@ const Treatments = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
                 <input
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                   placeholder="Ej: Limpieza Dental"
                   required
                   className="ios-input"
@@ -342,10 +333,7 @@ const Treatments = () => {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Categoría</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData({ ...formData, category: value })}
-                >
+                <Select value={formCategory} onValueChange={setFormCategory}>
                   <SelectTrigger className="ios-input">
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
@@ -362,8 +350,8 @@ const Treatments = () => {
                   <input
                     type="number"
                     step="0.01"
-                    value={formData.base_price}
-                    onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
+                    value={formBasePrice}
+                    onChange={(e) => setFormBasePrice(e.target.value)}
                     placeholder="0.00"
                     className="ios-input"
                   />
@@ -372,8 +360,8 @@ const Treatments = () => {
                   <Label className="text-sm font-medium text-ios-gray-600">Duración (min)</Label>
                   <input
                     type="number"
-                    value={formData.duration_minutes}
-                    onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
+                    value={formDuration}
+                    onChange={(e) => setFormDuration(e.target.value)}
                     className="ios-input"
                   />
                 </div>
@@ -381,8 +369,8 @@ const Treatments = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Descripción</Label>
                 <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
                   rows={3}
                   className="ios-input resize-none"
                 />
@@ -399,9 +387,17 @@ const Treatments = () => {
               </button>
               <button 
                 type="submit"
-                className="flex-1 h-12 rounded-xl bg-ios-purple text-white font-semibold hover:bg-ios-purple/90 transition-colors touch-feedback"
+                disabled={saving}
+                className="flex-1 h-12 rounded-xl bg-ios-purple text-white font-semibold hover:bg-ios-purple/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {editingTreatment ? 'Guardar' : 'Crear'}
+                {saving ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  editingTreatment ? 'Guardar' : 'Crear'
+                )}
               </button>
             </div>
           </form>

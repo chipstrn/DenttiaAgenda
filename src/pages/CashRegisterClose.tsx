@@ -4,9 +4,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { 
   Banknote, CreditCard, ArrowUpRight, Send, 
-  Loader2, CheckCircle, Clock, Plus, Trash2 
+  Loader2, CheckCircle, Clock, Plus, Trash2, Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -28,6 +30,8 @@ interface CashWithdrawal {
 }
 
 const CashRegisterClose = () => {
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [existingRegister, setExistingRegister] = useState<any>(null);
@@ -49,15 +53,21 @@ const CashRegisterClose = () => {
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const checkExistingRegister = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  // Si es admin, redirigir a auditoría
+  useEffect(() => {
+    if (isAdmin) {
+      navigate('/finance-audit', { replace: true });
+    }
+  }, [isAdmin, navigate]);
 
+  const checkExistingRegister = useCallback(async () => {
+    if (!user?.id || isAdmin) return;
+
+    try {
       const { data, error } = await supabase
         .from('cash_registers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('cashier_id', user.id)
         .eq('register_date', today)
         .maybeSingle();
 
@@ -74,7 +84,7 @@ const CashRegisterClose = () => {
     } finally {
       setLoading(false);
     }
-  }, [today]);
+  }, [today, user?.id, isAdmin]);
 
   useEffect(() => {
     checkExistingRegister();
@@ -135,12 +145,11 @@ const CashRegisterClose = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.id) return;
+    
     setSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No autenticado');
-
       const totals = calculateTotals();
 
       // Crear registro de caja
@@ -215,6 +224,22 @@ const CashRegisterClose = () => {
 
   const totals = calculateTotals();
 
+  // Si es admin, mostrar mensaje de redirección
+  if (isAdmin) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center">
+            <Shield className="h-16 w-16 text-ios-blue mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-ios-gray-900 mb-2">Acceso de Administrador</h2>
+            <p className="text-ios-gray-500 mb-4">Redirigiendo a Auditoría Financiera...</p>
+            <Loader2 className="h-6 w-6 animate-spin text-ios-blue mx-auto" />
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
   if (loading) {
     return (
       <MainLayout>
@@ -226,7 +251,6 @@ const CashRegisterClose = () => {
   }
 
   // Si ya existe un corte para hoy - MODO CIEGO para recepción
-  // NO muestra diferencias ni resultados de auditoría
   if (existingRegister) {
     return (
       <MainLayout>
@@ -252,7 +276,7 @@ const CashRegisterClose = () => {
             </h1>
             <p className="text-ios-gray-500 mb-8">
               {existingRegister.status === 'pending' 
-                ? 'Tu corte de caja está pendiente de revisión por el administrador. Te notificaremos cuando sea revisado.'
+                ? 'Tu corte de caja está pendiente de revisión por el administrador.'
                 : existingRegister.status === 'approved'
                 ? 'El administrador ha aprobado tu corte de caja.'
                 : 'El administrador ha rechazado tu corte. Revisa las notas.'}
@@ -273,16 +297,7 @@ const CashRegisterClose = () => {
                   <span className="text-ios-gray-500">Total Efectivo Declarado</span>
                   <span className="font-bold text-ios-blue">${existingRegister.closing_balance.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-ios-gray-500">Total Tarjeta</span>
-                  <span className="font-medium">${(existingRegister.services_card + existingRegister.products_card).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-ios-gray-500">Total Transferencia</span>
-                  <span className="font-medium">${(existingRegister.services_transfer + existingRegister.products_transfer).toFixed(2)}</span>
-                </div>
                 
-                {/* Solo mostrar notas del admin si el corte fue revisado */}
                 {existingRegister.status !== 'pending' && existingRegister.admin_notes && (
                   <div className="pt-3 border-t border-ios-gray-100">
                     <p className="text-sm text-ios-gray-500 mb-1">Notas del Administrador:</p>
@@ -292,7 +307,6 @@ const CashRegisterClose = () => {
               </div>
             </div>
 
-            {/* Mensaje de espera para cortes pendientes */}
             {existingRegister.status === 'pending' && (
               <div className="mt-6 p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20">
                 <p className="text-sm text-ios-orange font-medium">
@@ -318,7 +332,7 @@ const CashRegisterClose = () => {
 
       <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
         {/* Saldo Inicial */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '0ms' }}>
+        <div className="ios-card p-5 animate-slide-up">
           <h2 className="font-bold text-ios-gray-900 mb-4">Saldo Inicial</h2>
           <div className="space-y-2">
             <Label className="text-sm font-medium text-ios-gray-600">Efectivo en caja al iniciar</Label>
@@ -338,7 +352,7 @@ const CashRegisterClose = () => {
         </div>
 
         {/* Ingresos por Servicios */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
+        <div className="ios-card p-5 animate-slide-up">
           <h2 className="font-bold text-ios-gray-900 mb-4">Ingresos por Servicios</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -396,7 +410,7 @@ const CashRegisterClose = () => {
         </div>
 
         {/* Ingresos por Productos */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '100ms' }}>
+        <div className="ios-card p-5 animate-slide-up">
           <h2 className="font-bold text-ios-gray-900 mb-4">Ingresos por Productos</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -454,7 +468,7 @@ const CashRegisterClose = () => {
         </div>
 
         {/* Otros Ingresos */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '150ms' }}>
+        <div className="ios-card p-5 animate-slide-up">
           <h2 className="font-bold text-ios-gray-900 mb-4">Otros Ingresos</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -484,7 +498,7 @@ const CashRegisterClose = () => {
         </div>
 
         {/* Gastos del Día */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '200ms' }}>
+        <div className="ios-card p-5 animate-slide-up">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-ios-gray-900">Gastos del Día</h2>
             <button
@@ -534,7 +548,7 @@ const CashRegisterClose = () => {
         </div>
 
         {/* Retiros de Efectivo */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '250ms' }}>
+        <div className="ios-card p-5 animate-slide-up">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-ios-gray-900">Retiros de Efectivo</h2>
             <button
@@ -589,8 +603,8 @@ const CashRegisterClose = () => {
           )}
         </div>
 
-        {/* Resumen - Solo muestra lo que declaró, NO muestra comparación */}
-        <div className="ios-card p-5 bg-ios-gray-900 text-white animate-slide-up" style={{ animationDelay: '300ms' }}>
+        {/* Resumen */}
+        <div className="ios-card p-5 bg-ios-gray-900 text-white animate-slide-up">
           <h2 className="font-bold mb-4">Resumen del Corte</h2>
           <div className="space-y-3">
             <div className="flex justify-between text-ios-gray-300">
@@ -625,7 +639,6 @@ const CashRegisterClose = () => {
           type="submit"
           disabled={submitting}
           className="w-full h-14 rounded-2xl bg-ios-blue text-white font-bold text-lg shadow-ios-lg hover:bg-ios-blue/90 transition-all duration-200 touch-feedback disabled:opacity-50 flex items-center justify-center gap-3 animate-slide-up"
-          style={{ animationDelay: '350ms' }}
         >
           {submitting ? (
             <>

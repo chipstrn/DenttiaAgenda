@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ interface PatientRecord {
 
 const Patients = () => {
   const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [records, setRecords] = useState<Record<string, PatientRecord>>({});
   const [loading, setLoading] = useState(true);
@@ -34,20 +36,15 @@ const Patients = () => {
 
   const fetchPatients = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Parallel fetch for better performance
+      // Fetch ALL patients (shared data)
       const [patientsResult, recordsResult] = await Promise.all([
         supabase
           .from('patients')
           .select('id, first_name, last_name, email, phone, date_of_birth, created_at')
-          .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
         supabase
           .from('patient_records')
           .select('patient_id, reception_completed_at, doctor_completed_at')
-          .eq('user_id', user.id)
       ]);
 
       if (patientsResult.error) throw patientsResult.error;
@@ -265,18 +262,20 @@ const Patients = () => {
                     >
                       <Edit className="h-4 w-4 text-ios-gray-600" />
                     </button>
-                    <button 
-                      onClick={() => handleDelete(patient.id)}
-                      disabled={isDeleting}
-                      className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback disabled:opacity-50"
-                      title="Eliminar"
-                    >
-                      {isDeleting ? (
-                        <Loader2 className="h-4 w-4 text-ios-red animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4 text-ios-red" />
-                      )}
-                    </button>
+                    {isAdmin && (
+                      <button 
+                        onClick={() => handleDelete(patient.id)}
+                        disabled={isDeleting}
+                        className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback disabled:opacity-50"
+                        title="Eliminar"
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="h-4 w-4 text-ios-red animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-ios-red" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               );

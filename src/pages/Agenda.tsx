@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Plus, Clock, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, addDays, subDays, isSameDay } from 'date-fns';
@@ -47,6 +48,7 @@ interface Patient {
 }
 
 const Agenda = () => {
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,19 +66,15 @@ const Agenda = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
+      // Fetch ALL appointments and patients (shared data)
       const [appointmentsResult, patientsResult] = await Promise.all([
         supabase
           .from('appointments')
           .select('*, patients(first_name, last_name)')
-          .eq('user_id', user.id)
           .order('start_time', { ascending: true }),
         supabase
           .from('patients')
           .select('id, first_name, last_name')
-          .eq('user_id', user.id)
           .order('first_name', { ascending: true })
       ]);
 
@@ -108,6 +106,7 @@ const Agenda = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.id) return;
     
     if (!patientId) {
       toast.error('Selecciona un paciente');
@@ -121,9 +120,6 @@ const Agenda = () => {
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const startDateTime = new Date(`${appointmentDate}T${startTime}`);
       const endDateTime = new Date(`${appointmentDate}T${endTime}`);
 
@@ -192,7 +188,7 @@ const Agenda = () => {
       <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Agenda</h1>
-          <p className="text-ios-gray-500 mt-1 font-medium">Gestiona las citas de tu clínica</p>
+          <p className="text-ios-gray-500 mt-1 font-medium">Gestiona las citas de la clínica</p>
         </div>
         <button 
           onClick={() => setIsDialogOpen(true)}

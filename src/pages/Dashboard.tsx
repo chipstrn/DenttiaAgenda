@@ -15,12 +15,10 @@ interface StatCardProps {
   value: string | number;
   icon: React.ElementType;
   color: string;
-  trend?: string;
-  trendUp?: boolean;
   delay?: number;
 }
 
-const StatCard = ({ title, value, icon: Icon, color, trend, trendUp, delay = 0 }: StatCardProps) => (
+const StatCard = ({ title, value, icon: Icon, color, delay = 0 }: StatCardProps) => (
   <div 
     className="ios-card p-5 animate-slide-up"
     style={{ animationDelay: `${delay}ms` }}
@@ -29,15 +27,6 @@ const StatCard = ({ title, value, icon: Icon, color, trend, trendUp, delay = 0 }
       <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", color)}>
         <Icon className="h-5 w-5 text-white" />
       </div>
-      {trend && (
-        <div className={cn(
-          "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold",
-          trendUp ? "bg-ios-green/15 text-ios-green" : "bg-ios-red/15 text-ios-red"
-        )}>
-          <TrendingUp className={cn("h-3 w-3", !trendUp && "rotate-180")} />
-          {trend}
-        </div>
-      )}
     </div>
     <p className="text-2xl font-bold text-ios-gray-900 tracking-tight">{value}</p>
     <p className="text-sm text-ios-gray-500 font-medium mt-1">{title}</p>
@@ -118,7 +107,7 @@ const QuickAction = ({ icon: Icon, title, subtitle, color, onClick, delay = 0 }:
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { isAdmin } = useAuth();
   const [stats, setStats] = useState({
     patientsCount: 0,
     appointmentsToday: 0,
@@ -129,15 +118,13 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!user?.id) return;
-
     try {
       const today = new Date();
       const dayStart = startOfDay(today).toISOString();
       const dayEnd = endOfDay(today).toISOString();
       const monthStart = startOfMonth(today).toISOString();
 
-      // Parallel queries for better performance
+      // Fetch ALL data (shared across clinic)
       const [
         patientsResult,
         appointmentsResult,
@@ -146,25 +133,21 @@ const Dashboard = () => {
       ] = await Promise.all([
         supabase
           .from('patients')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id),
+          .select('id', { count: 'exact', head: true }),
         supabase
           .from('appointments')
           .select('*, patients(first_name, last_name)')
-          .eq('user_id', user.id)
           .gte('start_time', dayStart)
           .lte('start_time', dayEnd)
           .order('start_time', { ascending: true }),
         supabase
           .from('payments')
           .select('amount')
-          .eq('user_id', user.id)
           .eq('status', 'completed')
           .gte('created_at', monthStart),
         supabase
           .from('treatments')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
           .eq('is_active', true)
       ]);
 
@@ -183,7 +166,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -310,14 +293,16 @@ const Dashboard = () => {
             delay={400}
           />
           
-          <QuickAction 
-            icon={DollarSign}
-            title="Registrar Pago"
-            subtitle="Cobro rápido"
-            color="bg-ios-teal"
-            onClick={() => navigate('/finance')}
-            delay={450}
-          />
+          {isAdmin && (
+            <QuickAction 
+              icon={DollarSign}
+              title="Registrar Pago"
+              subtitle="Cobro rápido"
+              color="bg-ios-teal"
+              onClick={() => navigate('/finance')}
+              delay={450}
+            />
+          )}
 
           {/* Reminder Card */}
           <div 
