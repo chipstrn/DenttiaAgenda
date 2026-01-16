@@ -17,7 +17,8 @@ import {
   ClipboardCheck,
   Shield,
   UserCog,
-  ScrollText
+  ScrollText,
+  Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -63,6 +64,7 @@ const Sidebar = () => {
 
   const adminMenuItems = [
     { icon: UserCog, label: 'Usuarios', path: '/users', color: 'bg-ios-purple', adminOnly: true },
+    { icon: Eye, label: 'Auditoría Externa', path: '/audit-sessions', color: 'bg-ios-teal', adminOnly: true },
     { icon: ScrollText, label: 'Logs Auditoría', path: '/audit-logs', color: 'bg-ios-red', adminOnly: true },
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
   ];

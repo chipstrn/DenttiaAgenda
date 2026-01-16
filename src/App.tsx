@@ -18,6 +18,7 @@ import CashRegister from "./pages/CashRegister";
 import CashAudit from "./pages/CashAudit";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
+import AuditSessions from "./pages/AuditSessions";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -124,6 +125,12 @@ const App = () => (
           <Route path="/audit-logs" element={
             <ProtectedRoute>
               <AuditLogs />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/audit-sessions" element={
+            <ProtectedRoute>
+              <AuditSessions />
             </ProtectedRoute>
           } />
           
