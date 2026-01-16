@@ -14,6 +14,8 @@ import Treatments from "./pages/Treatments";
 import Doctors from "./pages/Doctors";
 import Prescriptions from "./pages/Prescriptions";
 import Finance from "./pages/Finance";
+import CashRegister from "./pages/CashRegister";
+import CashAudit from "./pages/CashAudit";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -95,6 +97,18 @@ const App = () => (
           <Route path="/finance" element={
             <ProtectedRoute>
               <Finance />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/cash-register" element={
+            <ProtectedRoute>
+              <CashRegister />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/cash-audit" element={
+            <ProtectedRoute>
+              <CashAudit />
             </ProtectedRoute>
           } />
           
