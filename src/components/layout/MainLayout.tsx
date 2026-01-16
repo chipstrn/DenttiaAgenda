@@ -1,75 +1,19 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Sidebar from './Sidebar';
 import { Bell, Search, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
-interface UserData {
-  displayName: string;
-  initials: string;
-  role: string;
-}
-
 const MainLayout = ({ children }: MainLayoutProps) => {
-  const [userData, setUserData] = useState<UserData>({
-    displayName: 'Usuario',
-    initials: 'US',
-    role: 'Doctor'
-  });
+  const { profile, user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchUserData = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !isMounted) return;
-        
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, role')
-          .eq('id', user.id)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching profile:', error);
-          return;
-        }
-
-        if (isMounted && profileData) {
-          const displayName = profileData.first_name && profileData.last_name 
-            ? `${profileData.first_name} ${profileData.last_name}`
-            : user.email?.split('@')[0] || 'Usuario';
-
-          const initials = profileData.first_name && profileData.last_name
-            ? `${profileData.first_name[0]}${profileData.last_name[0]}`.toUpperCase()
-            : displayName.substring(0, 2).toUpperCase();
-
-          setUserData({
-            displayName,
-            initials,
-            role: profileData.role || 'Doctor'
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      }
-    };
-
-    fetchUserData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -79,6 +23,28 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const displayName = useMemo(() => {
+    if (profile?.first_name && profile?.last_name) {
+      return `${profile.first_name} ${profile.last_name}`;
+    }
+    return user?.email?.split('@')[0] || 'Usuario';
+  }, [profile, user]);
+
+  const initials = useMemo(() => {
+    if (profile?.first_name && profile?.last_name) {
+      return `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase();
+    }
+    return displayName.substring(0, 2).toUpperCase();
+  }, [profile, displayName]);
+
+  const roleLabel = useMemo(() => {
+    switch (profile?.role) {
+      case 'admin': return 'Administrador';
+      case 'recepcion': return 'Recepción';
+      default: return 'Doctor';
+    }
+  }, [profile?.role]);
 
   return (
     <div className="min-h-screen bg-ios-gray-100">
@@ -119,11 +85,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             {/* Profile */}
             <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">
-                <p className="text-sm font-semibold text-ios-gray-900">{userData.displayName}</p>
-                <p className="text-xs text-ios-gray-500 font-medium">{userData.role}</p>
+                <p className="text-sm font-semibold text-ios-gray-900">{displayName}</p>
+                <p className="text-xs text-ios-gray-500 font-medium">{roleLabel}</p>
               </div>
               <button className="h-10 w-10 rounded-xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center text-white font-semibold text-sm shadow-ios-sm hover:shadow-ios transition-all duration-200 touch-feedback">
-                {userData.initials}
+                {initials}
               </button>
             </div>
           </div>

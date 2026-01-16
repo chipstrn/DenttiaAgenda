@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -18,81 +18,20 @@ import {
   Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-
-interface UserProfile {
-  role: string;
-  first_name: string;
-  last_name: string;
-}
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { profile, signOut, isAdmin, isRecepcion } = useAuth();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchUserProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !isMounted) return;
-
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role, first_name, last_name')
-          .eq('id', user.id)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching profile:', error);
-          return;
-        }
-
-        if (isMounted && profile) {
-          setUserProfile({
-            role: profile.role || 'doctor',
-            first_name: profile.first_name || '',
-            last_name: profile.last_name || ''
-          });
-        }
-      } catch (error) {
-        console.error('Error in fetchUserProfile:', error);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchUserProfile();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        setUserProfile(null);
-      } else if (event === 'SIGNED_IN') {
-        fetchUserProfile();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const userRole = userProfile?.role || 'doctor';
   const userName = useMemo(() => {
-    if (!userProfile) return 'Usuario';
-    return `${userProfile.first_name} ${userProfile.last_name}`.trim() || 'Usuario';
-  }, [userProfile]);
+    if (!profile) return 'Usuario';
+    return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Usuario';
+  }, [profile]);
 
-  const isAdmin = userRole === 'admin';
-  const isRecepcion = userRole === 'recepcion';
+  const userRole = profile?.role || 'doctor';
 
   // Menú principal - visible para todos
   const mainMenuItems = useMemo(() => [
@@ -123,15 +62,14 @@ const Sidebar = () => {
 
   const handleLogout = useCallback(async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      await signOut();
       toast.success('Sesión cerrada');
       navigate('/login');
     } catch (error) {
       console.error('Error signing out:', error);
       toast.error('Error al cerrar sesión');
     }
-  }, [navigate]);
+  }, [signOut, navigate]);
 
   const MenuItem = useCallback(({ item }: { item: { icon: React.ElementType; label: string; path: string; color: string } }) => {
     const isActive = location.pathname === item.path;
@@ -170,27 +108,6 @@ const Sidebar = () => {
       </Link>
     );
   }, [location.pathname]);
-
-  if (isLoading) {
-    return (
-      <div className="h-screen w-72 bg-ios-gray-50 flex flex-col fixed left-0 top-0 border-r border-ios-gray-200/50">
-        <div className="p-6 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center shadow-ios-sm">
-              <Activity className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-ios-gray-900 tracking-tight">Denttia</h1>
-              <p className="text-xs text-ios-gray-500 font-medium">ERP Dental</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="h-8 w-8 border-2 border-ios-blue border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-screen w-72 bg-ios-gray-50 flex flex-col fixed left-0 top-0 border-r border-ios-gray-200/50">

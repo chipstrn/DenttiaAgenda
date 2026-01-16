@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -11,53 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-
-        if (session) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('id, role, first_name, last_name')
-            .eq('id', session.user.id)
-            .single();
-
-          setProfile(profileData);
-        }
-      } catch (error) {
-        console.error('Auth check error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('id, role, first_name, last_name')
-          .eq('id', session.user.id)
-          .single();
-        setProfile(profileData);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const { session, profile, loading, isAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -77,7 +30,8 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
   // Verificar roles si se especificaron
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = profile?.role || 'doctor';
-    if (!allowedRoles.includes(userRole) && userRole !== 'admin') {
+    // Admin siempre tiene acceso
+    if (!isAdmin && !allowedRoles.includes(userRole)) {
       return <Navigate to="/" replace />;
     }
   }
@@ -85,35 +39,8 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
   return <>{children}</>;
 };
 
-// Hook para obtener el perfil del usuario actual
+// Hook para obtener el perfil del usuario actual (ahora usa el contexto)
 export const useUserProfile = () => {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, role, first_name, last_name')
-            .eq('id', user.id)
-            .single();
-          setProfile(data);
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, []);
-
-  const isAdmin = profile?.role === 'admin';
-  const isRecepcion = profile?.role === 'recepcion';
-
+  const { profile, loading, isAdmin, isRecepcion } = useAuth();
   return { profile, loading, isAdmin, isRecepcion };
 };

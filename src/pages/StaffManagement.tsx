@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { 
-  Plus, Users, Shield, UserCheck, UserX, 
+  Plus, Users, Shield, UserCheck, 
   Mail, Key, Loader2, AlertTriangle, Eye, EyeOff 
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,63 +35,50 @@ interface StaffMember {
   is_active: boolean;
   must_change_password: boolean;
   last_login: string | null;
-  created_at?: string;
-  email?: string;
-}
-
-interface Role {
-  id: string;
-  name: string;
-  description: string;
 }
 
 const StaffManagement = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    first_name: '',
-    last_name: '',
-    role: 'recepcion'
-  });
+  // Individual form states
+  const [formEmail, setFormEmail] = useState('');
+  const [formPassword, setFormPassword] = useState('');
+  const [formFirstName, setFormFirstName] = useState('');
+  const [formLastName, setFormLastName] = useState('');
+  const [formRole, setFormRole] = useState('recepcion');
 
-  const fetchData = async () => {
+  const fetchStaff = useCallback(async () => {
     try {
-      // Obtener perfiles con información de auth
-      const { data: profilesData, error: profilesError } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, first_name, last_name, role, is_active, must_change_password, last_login')
+        .order('first_name', { ascending: true });
 
-      if (profilesError) throw profilesError;
-
-      // Obtener emails de auth.users a través de una función o vista
-      // Por ahora usamos los datos disponibles
-      setStaff(profilesData || []);
-
-      // Obtener roles
-      const { data: rolesData } = await supabase
-        .from('roles')
-        .select('*')
-        .order('name');
-
-      setRoles(rolesData || []);
+      if (error) throw error;
+      setStaff(data || []);
     } catch (error) {
       console.error('Error fetching staff:', error);
       toast.error('Error al cargar personal');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchStaff();
+  }, [fetchStaff]);
+
+  const resetForm = useCallback(() => {
+    setFormEmail('');
+    setFormPassword('');
+    setFormFirstName('');
+    setFormLastName('');
+    setFormRole('recepcion');
+    setShowPassword(false);
   }, []);
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -101,13 +88,13 @@ const StaffManagement = () => {
     try {
       // Crear usuario en auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
+        email: formEmail,
+        password: formPassword,
         options: {
           data: {
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            role: formData.role
+            first_name: formFirstName,
+            last_name: formLastName,
+            role: formRole
           }
         }
       });
@@ -119,24 +106,20 @@ const StaffManagement = () => {
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
-            role: formData.role,
+            role: formRole,
             must_change_password: true
           })
           .eq('id', authData.user.id);
 
-        if (profileError) throw profileError;
+        if (profileError) {
+          console.error('Profile update error:', profileError);
+        }
       }
 
       toast.success('Usuario creado correctamente');
       setIsDialogOpen(false);
-      setFormData({
-        email: '',
-        password: '',
-        first_name: '',
-        last_name: '',
-        role: 'recepcion'
-      });
-      fetchData();
+      resetForm();
+      fetchStaff();
     } catch (error: any) {
       console.error('Error creating user:', error);
       if (error.message?.includes('already registered')) {
@@ -149,7 +132,7 @@ const StaffManagement = () => {
     }
   };
 
-  const handleToggleActive = async (userId: string, currentStatus: boolean) => {
+  const handleToggleActive = useCallback(async (userId: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
         .from('profiles')
@@ -158,15 +141,17 @@ const StaffManagement = () => {
 
       if (error) throw error;
 
+      setStaff(prev => prev.map(s => 
+        s.id === userId ? { ...s, is_active: !currentStatus } : s
+      ));
       toast.success(currentStatus ? 'Usuario desactivado' : 'Usuario activado');
-      fetchData();
     } catch (error) {
       console.error('Error toggling user status:', error);
       toast.error('Error al cambiar estado');
     }
-  };
+  }, []);
 
-  const handleResetPassword = async (userId: string) => {
+  const handleResetPassword = useCallback(async (userId: string) => {
     try {
       const { error } = await supabase
         .from('profiles')
@@ -175,12 +160,15 @@ const StaffManagement = () => {
 
       if (error) throw error;
 
+      setStaff(prev => prev.map(s => 
+        s.id === userId ? { ...s, must_change_password: true } : s
+      ));
       toast.success('El usuario deberá cambiar su contraseña en el próximo inicio');
     } catch (error) {
       console.error('Error resetting password flag:', error);
       toast.error('Error al marcar cambio de contraseña');
     }
-  };
+  }, []);
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -199,6 +187,9 @@ const StaffManagement = () => {
       default: return role;
     }
   };
+
+  const activeCount = staff.filter(s => s.is_active !== false).length;
+  const adminCount = staff.filter(s => s.role === 'admin').length;
 
   return (
     <MainLayout>
@@ -246,9 +237,7 @@ const StaffManagement = () => {
               <UserCheck className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-ios-gray-900">
-            {staff.filter(s => s.is_active !== false).length}
-          </p>
+          <p className="text-2xl font-bold text-ios-gray-900">{activeCount}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Usuarios Activos</p>
         </div>
         
@@ -258,9 +247,7 @@ const StaffManagement = () => {
               <Shield className="h-5 w-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-ios-gray-900">
-            {staff.filter(s => s.role === 'admin').length}
-          </p>
+          <p className="text-2xl font-bold text-ios-gray-900">{adminCount}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Administradores</p>
         </div>
       </div>
@@ -352,7 +339,10 @@ const StaffManagement = () => {
       </div>
 
       {/* Create User Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) resetForm();
+      }}>
         <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-bold text-ios-gray-900">Nuevo Usuario</DialogTitle>
@@ -367,8 +357,8 @@ const StaffManagement = () => {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
                   <input
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    value={formFirstName}
+                    onChange={(e) => setFormFirstName(e.target.value)}
                     placeholder="Nombre"
                     required
                     className="ios-input"
@@ -377,8 +367,8 @@ const StaffManagement = () => {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-ios-gray-600">Apellido *</Label>
                   <input
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    value={formLastName}
+                    onChange={(e) => setFormLastName(e.target.value)}
                     placeholder="Apellido"
                     required
                     className="ios-input"
@@ -392,8 +382,8 @@ const StaffManagement = () => {
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
                   <input
                     type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
                     placeholder="usuario@denttia.com"
                     required
                     className="ios-input pl-12"
@@ -407,8 +397,8 @@ const StaffManagement = () => {
                   <Key className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-ios-gray-400" />
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
                     placeholder="Mínimo 6 caracteres"
                     required
                     minLength={6}
@@ -427,10 +417,7 @@ const StaffManagement = () => {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Rol *</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value) => setFormData({ ...formData, role: value })}
-                >
+                <Select value={formRole} onValueChange={setFormRole}>
                   <SelectTrigger className="ios-input">
                     <SelectValue />
                   </SelectTrigger>

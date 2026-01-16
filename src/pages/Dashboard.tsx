@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Users, Calendar, DollarSign, Activity, TrendingUp, Clock, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -117,6 +118,7 @@ const QuickAction = ({ icon: Icon, title, subtitle, color, onClick, delay = 0 }:
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     patientsCount: 0,
     appointmentsToday: 0,
@@ -127,10 +129,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    if (!user?.id) return;
 
+    try {
       const today = new Date();
       const dayStart = startOfDay(today).toISOString();
       const dayEnd = endOfDay(today).toISOString();
@@ -182,7 +183,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchData();

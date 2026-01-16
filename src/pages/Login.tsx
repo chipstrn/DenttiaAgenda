@@ -3,34 +3,24 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Activity, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { session, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
-    // Verificar si ya hay sesión activa
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate('/');
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        navigate('/');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    // Redirect if already logged in
+    if (!authLoading && session) {
+      navigate('/', { replace: true });
+    }
+  }, [session, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,20 +41,37 @@ const Login = () => {
         return;
       }
 
-      // Actualizar último login (sin bloquear el flujo)
-      supabase
-        .from('profiles')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', data.user.id)
-        .then(() => {});
+      // Update last login in background
+      if (data.user) {
+        supabase
+          .from('profiles')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', data.user.id)
+          .then(() => {});
+      }
 
       toast.success('Bienvenido');
+      navigate('/', { replace: true });
     } catch (error: any) {
       toast.error('Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-ios-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
+      </div>
+    );
+  }
+
+  // Don't render login form if already logged in
+  if (session) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-ios-gray-100 flex flex-col items-center justify-center p-6">
