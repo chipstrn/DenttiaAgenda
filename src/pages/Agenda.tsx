@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import {
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Clock, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Clock, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, addDays, subDays, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -50,96 +50,110 @@ const Agenda = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    patient_id: '',
-    title: '',
-    description: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
-    start_time: '09:00',
-    end_time: '10:00',
-    status: 'scheduled',
-    treatment_type: ''
-  });
+  
+  // Individual form states
+  const [patientId, setPatientId] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('10:00');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: appointmentsData, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select('*, patients(first_name, last_name)')
-        .eq('user_id', user.id)
-        .order('start_time', { ascending: true });
+      const [appointmentsResult, patientsResult] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select('*, patients(first_name, last_name)')
+          .eq('user_id', user.id)
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('patients')
+          .select('id, first_name, last_name')
+          .eq('user_id', user.id)
+          .order('first_name', { ascending: true })
+      ]);
 
-      if (appointmentsError) throw appointmentsError;
-      setAppointments(appointmentsData || []);
+      if (appointmentsResult.error) throw appointmentsResult.error;
+      if (patientsResult.error) throw patientsResult.error;
 
-      const { data: patientsData, error: patientsError } = await supabase
-        .from('patients')
-        .select('id, first_name, last_name')
-        .eq('user_id', user.id)
-        .order('first_name', { ascending: true });
-
-      if (patientsError) throw patientsError;
-      setPatients(patientsData || []);
+      setAppointments(appointmentsResult.data || []);
+      setPatients(patientsResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  const resetForm = useCallback(() => {
+    setPatientId('');
+    setTitle('');
+    setDescription('');
+    setAppointmentDate(format(new Date(), 'yyyy-MM-dd'));
+    setStartTime('09:00');
+    setEndTime('10:00');
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!patientId) {
+      toast.error('Selecciona un paciente');
+      return;
+    }
+    
+    if (!title.trim()) {
+      toast.error('Ingresa el motivo de la cita');
+      return;
+    }
+
+    setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const startDateTime = new Date(`${formData.date}T${formData.start_time}`);
-      const endDateTime = new Date(`${formData.date}T${formData.end_time}`);
+      const startDateTime = new Date(`${appointmentDate}T${startTime}`);
+      const endDateTime = new Date(`${appointmentDate}T${endTime}`);
 
       const { error } = await supabase
         .from('appointments')
         .insert({
           user_id: user.id,
-          patient_id: formData.patient_id,
-          title: formData.title,
-          description: formData.description,
+          patient_id: patientId,
+          title: title.trim(),
+          description: description.trim(),
           start_time: startDateTime.toISOString(),
           end_time: endDateTime.toISOString(),
-          status: formData.status,
-          treatment_type: formData.treatment_type
+          status: 'scheduled'
         });
 
       if (error) throw error;
+      
       toast.success('Cita creada');
       setIsDialogOpen(false);
-      setFormData({
-        patient_id: '',
-        title: '',
-        description: '',
-        date: format(new Date(), 'yyyy-MM-dd'),
-        start_time: '09:00',
-        end_time: '10:00',
-        status: 'scheduled',
-        treatment_type: ''
-      });
+      resetForm();
       fetchData();
     } catch (error) {
       console.error('Error creating appointment:', error);
       toast.error('Error al crear cita');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = useCallback(async (id: string, status: string) => {
     try {
       const { error } = await supabase
         .from('appointments')
@@ -147,13 +161,16 @@ const Agenda = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
+      setAppointments(prev => 
+        prev.map(apt => apt.id === id ? { ...apt, status } : apt)
+      );
       toast.success('Estado actualizado');
-      fetchData();
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Error al actualizar');
     }
-  };
+  }, []);
 
   const todaysAppointments = appointments.filter(apt => 
     isSameDay(new Date(apt.start_time), selectedDate)
@@ -232,7 +249,7 @@ const Agenda = () => {
           <div className="p-3">
             {loading ? (
               <div className="flex items-center justify-center py-16">
-                <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+                <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
               </div>
             ) : todaysAppointments.length > 0 ? (
               <div className="space-y-2">
@@ -299,7 +316,10 @@ const Agenda = () => {
       </div>
 
       {/* Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) resetForm();
+      }}>
         <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-bold text-ios-gray-900">Nueva Cita</DialogTitle>
@@ -312,10 +332,7 @@ const Agenda = () => {
             <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Paciente *</Label>
-                <Select
-                  value={formData.patient_id}
-                  onValueChange={(value) => setFormData({ ...formData, patient_id: value })}
-                >
+                <Select value={patientId} onValueChange={setPatientId}>
                   <SelectTrigger className="ios-input">
                     <SelectValue placeholder="Seleccionar paciente" />
                   </SelectTrigger>
@@ -331,8 +348,8 @@ const Agenda = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Motivo *</Label>
                 <input
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ej: Limpieza dental"
                   required
                   className="ios-input"
@@ -343,8 +360,8 @@ const Agenda = () => {
                   <Label className="text-sm font-medium text-ios-gray-600">Fecha</Label>
                   <input
                     type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
                     required
                     className="ios-input text-sm"
                   />
@@ -353,8 +370,8 @@ const Agenda = () => {
                   <Label className="text-sm font-medium text-ios-gray-600">Inicio</Label>
                   <input
                     type="time"
-                    value={formData.start_time}
-                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
                     required
                     className="ios-input text-sm"
                   />
@@ -363,8 +380,8 @@ const Agenda = () => {
                   <Label className="text-sm font-medium text-ios-gray-600">Fin</Label>
                   <input
                     type="time"
-                    value={formData.end_time}
-                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
                     required
                     className="ios-input text-sm"
                   />
@@ -373,8 +390,8 @@ const Agenda = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Notas</Label>
                 <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                   rows={2}
                   className="ios-input resize-none"
                 />
@@ -391,9 +408,17 @@ const Agenda = () => {
               </button>
               <button 
                 type="submit"
-                className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback"
+                disabled={saving}
+                className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Crear Cita
+                {saving ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Creando...
+                  </>
+                ) : (
+                  'Crear Cita'
+                )}
               </button>
             </div>
           </form>

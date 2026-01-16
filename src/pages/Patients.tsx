@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -30,29 +30,31 @@ const Patients = () => {
   const [records, setRecords] = useState<Record<string, PatientRecord>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchPatients = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Parallel fetch for better performance
+      const [patientsResult, recordsResult] = await Promise.all([
+        supabase
+          .from('patients')
+          .select('id, first_name, last_name, email, phone, date_of_birth, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('patient_records')
+          .select('patient_id, reception_completed_at, doctor_completed_at')
+          .eq('user_id', user.id)
+      ]);
 
-      if (error) throw error;
-      setPatients(data || []);
-
-      // Fetch records status
-      const { data: recordsData } = await supabase
-        .from('patient_records')
-        .select('patient_id, reception_completed_at, doctor_completed_at')
-        .eq('user_id', user.id);
+      if (patientsResult.error) throw patientsResult.error;
+      setPatients(patientsResult.data || []);
 
       const recordsMap: Record<string, PatientRecord> = {};
-      recordsData?.forEach(r => {
+      recordsResult.data?.forEach(r => {
         recordsMap[r.patient_id] = r;
       });
       setRecords(recordsMap);
@@ -68,9 +70,10 @@ const Patients = () => {
     fetchPatients();
   }, [fetchPatients]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este paciente?')) return;
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este paciente? Esta acción no se puede deshacer.')) return;
     
+    setDeleting(id);
     try {
       const { error } = await supabase
         .from('patients')
@@ -78,27 +81,34 @@ const Patients = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
+      setPatients(prev => prev.filter(p => p.id !== id));
       toast.success('Paciente eliminado');
-      fetchPatients();
     } catch (error) {
       console.error('Error deleting patient:', error);
       toast.error('Error al eliminar paciente');
+    } finally {
+      setDeleting(null);
     }
-  };
+  }, []);
 
-  const getRecordStatus = (patientId: string) => {
+  const getRecordStatus = useCallback((patientId: string) => {
     const record = records[patientId];
     if (!record) return 'pending';
     if (record.doctor_completed_at) return 'complete';
     if (record.reception_completed_at) return 'reception';
     return 'pending';
-  };
+  }, [records]);
 
-  const filteredPatients = patients.filter(p => 
-    `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.phone?.includes(searchTerm)
-  );
+  const filteredPatients = useMemo(() => {
+    if (!searchTerm) return patients;
+    const term = searchTerm.toLowerCase();
+    return patients.filter(p => 
+      `${p.first_name} ${p.last_name}`.toLowerCase().includes(term) ||
+      p.email?.toLowerCase().includes(term) ||
+      p.phone?.includes(searchTerm)
+    );
+  }, [patients, searchTerm]);
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -155,16 +165,21 @@ const Patients = () => {
       <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '100ms' }}>
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+            <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
           </div>
         ) : filteredPatients.length > 0 ? (
           <div className="divide-y divide-ios-gray-100">
             {filteredPatients.map((patient, index) => {
               const status = getRecordStatus(patient.id);
+              const isDeleting = deleting === patient.id;
+              
               return (
                 <div 
                   key={patient.id}
-                  className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in"
+                  className={cn(
+                    "flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in",
+                    isDeleting && "opacity-50 pointer-events-none"
+                  )}
                   style={{ animationDelay: `${150 + index * 30}ms` }}
                   onClick={() => navigate(`/patient/${patient.id}/intake`)}
                 >
@@ -178,7 +193,7 @@ const Patients = () => {
                   {/* Avatar */}
                   <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center flex-shrink-0">
                     <span className="text-white font-semibold">
-                      {patient.first_name[0]}{patient.last_name[0]}
+                      {patient.first_name?.[0]?.toUpperCase()}{patient.last_name?.[0]?.toUpperCase()}
                     </span>
                   </div>
                   
@@ -228,34 +243,39 @@ const Patients = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/exam`); }}
+                      onClick={() => navigate(`/patient/${patient.id}/exam`)}
                       className="h-10 w-10 rounded-xl bg-ios-purple/10 flex items-center justify-center hover:bg-ios-purple/20 transition-colors touch-feedback"
                       title="Odontograma"
                     >
                       <Stethoscope className="h-4 w-4 text-ios-purple" />
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/anamnesis`); }}
+                      onClick={() => navigate(`/patient/${patient.id}/anamnesis`)}
                       className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green/20 transition-colors touch-feedback"
                       title="Anamnesis (Doctor)"
                     >
                       <FileText className="h-4 w-4 text-ios-green" />
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/intake`); }}
+                      onClick={() => navigate(`/patient/${patient.id}/intake`)}
                       className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
                       title="Editar (Recepción)"
                     >
                       <Edit className="h-4 w-4 text-ios-gray-600" />
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); handleDelete(patient.id); }}
-                      className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
+                      onClick={() => handleDelete(patient.id)}
+                      disabled={isDeleting}
+                      className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback disabled:opacity-50"
                       title="Eliminar"
                     >
-                      <Trash2 className="h-4 w-4 text-ios-red" />
+                      {isDeleting ? (
+                        <Loader2 className="h-4 w-4 text-ios-red animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 text-ios-red" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -267,14 +287,20 @@ const Patients = () => {
             <div className="h-20 w-20 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
               <User className="h-10 w-10 text-ios-gray-400" />
             </div>
-            <p className="text-ios-gray-900 font-semibold">No hay pacientes</p>
-            <p className="text-ios-gray-500 text-sm mt-1">Comienza agregando tu primer paciente</p>
-            <button 
-              onClick={() => navigate('/patient/new')}
-              className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
-            >
-              Agregar paciente
-            </button>
+            <p className="text-ios-gray-900 font-semibold">
+              {searchTerm ? 'Sin resultados' : 'No hay pacientes'}
+            </p>
+            <p className="text-ios-gray-500 text-sm mt-1">
+              {searchTerm ? 'Intenta con otro término de búsqueda' : 'Comienza agregando tu primer paciente'}
+            </p>
+            {!searchTerm && (
+              <button 
+                onClick={() => navigate('/patient/new')}
+                className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
+              >
+                Agregar paciente
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { Users, Calendar, DollarSign, Activity, TrendingUp, Clock, ChevronRight, Plus } from 'lucide-react';
+import { Users, Calendar, DollarSign, Activity, TrendingUp, Clock, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -49,9 +49,10 @@ interface AppointmentItemProps {
   treatment: string;
   status: string;
   delay?: number;
+  onClick?: () => void;
 }
 
-const AppointmentItem = ({ time, patient, treatment, status, delay = 0 }: AppointmentItemProps) => {
+const AppointmentItem = ({ time, patient, treatment, status, delay = 0, onClick }: AppointmentItemProps) => {
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-ios-green/15 text-ios-green';
@@ -74,6 +75,7 @@ const AppointmentItem = ({ time, patient, treatment, status, delay = 0 }: Appoin
 
   return (
     <div 
+      onClick={onClick}
       className="flex items-center gap-4 p-4 rounded-2xl hover:bg-ios-gray-100 transition-all duration-200 ease-ios cursor-pointer touch-feedback animate-slide-up"
       style={{ animationDelay: `${delay}ms` }}
     >
@@ -124,66 +126,67 @@ const Dashboard = () => {
   const [todaysAppointments, setTodaysAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+  const fetchData = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-        // Fetch Patients Count
-        const { count: patientsCount } = await supabase
+      const today = new Date();
+      const dayStart = startOfDay(today).toISOString();
+      const dayEnd = endOfDay(today).toISOString();
+      const monthStart = startOfMonth(today).toISOString();
+
+      // Parallel queries for better performance
+      const [
+        patientsResult,
+        appointmentsResult,
+        paymentsResult,
+        treatmentsResult
+      ] = await Promise.all([
+        supabase
           .from('patients')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
-
-        // Fetch Today's Appointments
-        const today = new Date();
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-        const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
-
-        const { data: appointments, count: appointmentsCount } = await supabase
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+        supabase
           .from('appointments')
           .select('*, patients(first_name, last_name)')
           .eq('user_id', user.id)
-          .gte('start_time', startOfDay)
-          .lte('start_time', endOfDay)
-          .order('start_time', { ascending: true });
-
-        // Fetch Monthly Revenue
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
-        const { data: payments } = await supabase
+          .gte('start_time', dayStart)
+          .lte('start_time', dayEnd)
+          .order('start_time', { ascending: true }),
+        supabase
           .from('payments')
           .select('amount')
           .eq('user_id', user.id)
           .eq('status', 'completed')
-          .gte('created_at', monthStart);
-
-        const monthlyRevenue = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
-
-        // Fetch Treatments Count
-        const { count: treatmentsCount } = await supabase
+          .gte('created_at', monthStart),
+        supabase
           .from('treatments')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .eq('is_active', true);
+          .eq('is_active', true)
+      ]);
 
-        setStats({
-          patientsCount: patientsCount || 0,
-          appointmentsToday: appointmentsCount || 0,
-          monthlyRevenue,
-          activeTreatments: treatmentsCount || 0
-        });
+      const monthlyRevenue = paymentsResult.data?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
 
-        setTodaysAppointments(appointments || []);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      setStats({
+        patientsCount: patientsResult.count || 0,
+        appointmentsToday: appointmentsResult.data?.length || 0,
+        monthlyRevenue,
+        activeTreatments: treatmentsResult.count || 0
+      });
 
-    fetchData();
+      setTodaysAppointments(appointmentsResult.data || []);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   return (
     <MainLayout>
@@ -202,8 +205,6 @@ const Dashboard = () => {
           value={`$${stats.monthlyRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
           icon={DollarSign} 
           color="bg-ios-green"
-          trend="+12.5%"
-          trendUp={true}
           delay={0}
         />
         <StatCard 
@@ -250,7 +251,7 @@ const Dashboard = () => {
             <div className="px-2 pb-3">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+                  <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
                 </div>
               ) : todaysAppointments.length > 0 ? (
                 <div className="space-y-1">
@@ -258,10 +259,11 @@ const Dashboard = () => {
                     <AppointmentItem 
                       key={apt.id}
                       time={format(new Date(apt.start_time), 'HH:mm')} 
-                      patient={`${apt.patients?.first_name || ''} ${apt.patients?.last_name || ''}`} 
-                      treatment={apt.title} 
+                      patient={`${apt.patients?.first_name || ''} ${apt.patients?.last_name || ''}`.trim() || 'Sin paciente'} 
+                      treatment={apt.title || 'Sin título'} 
                       status={apt.status}
                       delay={250 + (index * 50)}
+                      onClick={() => navigate('/agenda')}
                     />
                   ))}
                 </div>
@@ -303,7 +305,7 @@ const Dashboard = () => {
             title="Nuevo Paciente"
             subtitle="Registrar datos"
             color="bg-ios-green"
-            onClick={() => navigate('/patients')}
+            onClick={() => navigate('/patient/new')}
             delay={400}
           />
           

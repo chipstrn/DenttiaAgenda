@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import {
@@ -18,9 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, DollarSign, TrendingUp, CreditCard, Banknote, ArrowUpRight } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, CreditCard, Banknote, ArrowUpRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface Payment {
@@ -47,42 +47,54 @@ const Finance = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [stats, setStats] = useState({
     totalMonth: 0,
     totalToday: 0,
     countMonth: 0
   });
-  const [formData, setFormData] = useState({
-    patient_id: '',
-    amount: '',
-    payment_method: 'cash',
-    notes: ''
-  });
+  
+  // Individual form states
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [notes, setNotes] = useState('');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('payments')
-        .select('*, patients(first_name, last_name)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const [paymentsResult, patientsResult] = await Promise.all([
+        supabase
+          .from('payments')
+          .select('*, patients(first_name, last_name)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('patients')
+          .select('id, first_name, last_name')
+          .eq('user_id', user.id)
+          .order('first_name', { ascending: true })
+      ]);
 
-      if (paymentsError) throw paymentsError;
-      setPayments(paymentsData || []);
+      if (paymentsResult.error) throw paymentsResult.error;
+      
+      const paymentsData = paymentsResult.data || [];
+      setPayments(paymentsData);
+      setPatients(patientsResult.data || []);
 
+      // Calculate stats
       const now = new Date();
       const monthStart = startOfMonth(now).toISOString();
-      const todayStart = new Date(now.setHours(0, 0, 0, 0)).toISOString();
-      const todayEnd = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+      const todayStart = startOfDay(now).toISOString();
+      const todayEnd = endOfDay(now).toISOString();
 
-      const monthPayments = (paymentsData || []).filter(p => 
+      const monthPayments = paymentsData.filter(p => 
         p.created_at >= monthStart && p.status === 'completed'
       );
-      const todayPayments = (paymentsData || []).filter(p => 
+      const todayPayments = paymentsData.filter(p => 
         p.created_at >= todayStart && p.created_at <= todayEnd && p.status === 'completed'
       );
 
@@ -91,56 +103,71 @@ const Finance = () => {
         totalToday: todayPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
         countMonth: monthPayments.length
       });
-
-      const { data: patientsData } = await supabase
-        .from('patients')
-        .select('id, first_name, last_name')
-        .eq('user_id', user.id)
-        .order('first_name', { ascending: true });
-
-      setPatients(patientsData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  const resetForm = useCallback(() => {
+    setSelectedPatientId('');
+    setAmount('');
+    setPaymentMethod('cash');
+    setNotes('');
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const amountValue = parseFloat(amount);
+    if (!amountValue || amountValue <= 0) {
+      toast.error('Ingresa un monto válido');
+      return;
+    }
+
+    setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
+      const { data: newPayment, error } = await supabase
         .from('payments')
         .insert({
           user_id: user.id,
-          patient_id: formData.patient_id || null,
-          amount: parseFloat(formData.amount),
-          payment_method: formData.payment_method,
-          notes: formData.notes,
+          patient_id: selectedPatientId || null,
+          amount: amountValue,
+          payment_method: paymentMethod,
+          notes: notes.trim(),
           status: 'completed'
-        });
+        })
+        .select('*, patients(first_name, last_name)')
+        .single();
 
       if (error) throw error;
+      
+      // Update local state immediately
+      setPayments(prev => [newPayment, ...prev]);
+      setStats(prev => ({
+        ...prev,
+        totalMonth: prev.totalMonth + amountValue,
+        totalToday: prev.totalToday + amountValue,
+        countMonth: prev.countMonth + 1
+      }));
+      
       toast.success('Pago registrado');
       setIsDialogOpen(false);
-      setFormData({
-        patient_id: '',
-        amount: '',
-        payment_method: 'cash',
-        notes: ''
-      });
-      fetchData();
+      resetForm();
     } catch (error) {
       console.error('Error creating payment:', error);
       toast.error('Error al registrar pago');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -222,7 +249,7 @@ const Finance = () => {
         
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="h-8 w-8 border-3 border-ios-green/30 border-t-ios-green rounded-full animate-spin"></div>
+            <Loader2 className="h-8 w-8 animate-spin text-ios-green" />
           </div>
         ) : payments.length > 0 ? (
           <div className="divide-y divide-ios-gray-100">
@@ -234,8 +261,8 @@ const Finance = () => {
               >
                 <div className={cn(
                   "h-11 w-11 rounded-2xl flex items-center justify-center",
-                  payment.payment_method === 'card' ? 'bg-ios-purple/15' :
-                  payment.payment_method === 'transfer' ? 'bg-ios-blue/15' : 'bg-ios-green/15'
+                  payment.payment_method === 'card' ? 'bg-ios-purple/15 text-ios-purple' :
+                  payment.payment_method === 'transfer' ? 'bg-ios-blue/15 text-ios-blue' : 'bg-ios-green/15 text-ios-green'
                 )}>
                   {getPaymentMethodIcon(payment.payment_method)}
                 </div>
@@ -281,7 +308,10 @@ const Finance = () => {
       </div>
 
       {/* Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) resetForm();
+      }}>
         <DialogContent className="sm:max-w-[400px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-bold text-ios-gray-900">Registrar Pago</DialogTitle>
@@ -294,10 +324,7 @@ const Finance = () => {
             <div className="px-6 space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Paciente (opcional)</Label>
-                <Select
-                  value={formData.patient_id}
-                  onValueChange={(value) => setFormData({ ...formData, patient_id: value })}
-                >
+                <Select value={selectedPatientId} onValueChange={setSelectedPatientId}>
                   <SelectTrigger className="ios-input">
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
@@ -317,8 +344,9 @@ const Finance = () => {
                   <input
                     type="number"
                     step="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    min="0"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
                     required
                     className="ios-input pl-12"
@@ -327,10 +355,7 @@ const Finance = () => {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Método de Pago</Label>
-                <Select
-                  value={formData.payment_method}
-                  onValueChange={(value) => setFormData({ ...formData, payment_method: value })}
-                >
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                   <SelectTrigger className="ios-input">
                     <SelectValue />
                   </SelectTrigger>
@@ -344,8 +369,8 @@ const Finance = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Notas</Label>
                 <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                   rows={2}
                   placeholder="Concepto del pago..."
                   className="ios-input resize-none"
@@ -363,9 +388,17 @@ const Finance = () => {
               </button>
               <button 
                 type="submit"
-                className="flex-1 h-12 rounded-xl bg-ios-green text-white font-semibold hover:bg-ios-green/90 transition-colors touch-feedback"
+                disabled={saving}
+                className="flex-1 h-12 rounded-xl bg-ios-green text-white font-semibold hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Registrar
+                {saving ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  'Registrar'
+                )}
               </button>
             </div>
           </form>
