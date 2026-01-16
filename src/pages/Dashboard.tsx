@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useNavigate } from 'react-router-dom'; // <--- 1. IMPORTANTE PARA LA NAVEGACIÓN
+import { Link } from 'react-router-dom'; // <--- USAMOS LINK EN LUGAR DE USENAVIGATE
 
 interface DashboardStats {
   totalPatients: number;
@@ -31,7 +31,7 @@ interface Appointment {
 }
 
 const Dashboard = () => {
-  const navigate = useNavigate(); // <--- 2. HOOK DE NAVEGACIÓN
+  // Ya no necesitamos useNavigate para las tarjetas principales
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0,
     todayAppointments: 0,
@@ -41,10 +41,8 @@ const Dashboard = () => {
   const [todayAppointmentsList, setTodayAppointmentsList] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Función para cargar datos (Reutilizable)
   const fetchDashboardData = async () => {
     try {
-      // 1. Cargar Estadísticas
       const { count: patientsCount } = await supabase
         .from('patients')
         .select('*', { count: 'exact', head: true });
@@ -55,27 +53,20 @@ const Dashboard = () => {
         .select('*', { count: 'exact', head: true })
         .eq('appointment_date', today);
 
-      // 2. Cargar Lista de Citas de Hoy (Para Recordatorios)
-      const { data: appointmentsData, error: appointmentsError } = await supabase
+      const { data: appointmentsData } = await supabase
         .from('appointments')
-        .select(`
-          *,
-          patients (first_name, last_name)
-        `)
+        .select('*, patients (first_name, last_name)')
         .eq('appointment_date', today)
         .order('start_time', { ascending: true });
-
-      if (appointmentsError) throw appointmentsError;
 
       setStats({
         totalPatients: patientsCount || 0,
         todayAppointments: appointmentsCount || 0,
-        monthlyIncome: 0, // Pendiente de implementar lógica financiera real
+        monthlyIncome: 0, 
         pendingBalance: 0
       });
 
       setTodayAppointmentsList(appointmentsData || []);
-
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
@@ -86,28 +77,15 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData();
 
-    // 3. SUSCRIPCIÓN EN TIEMPO REAL (SOLUCIÓN A RECORDATORIOS ESTÁTICOS)
-    // Esto hace que si cambias el estado de una cita en otra pantalla, 
-    // el dashboard se actualice solito.
+    // SUSCRIPCIÓN REALTIME (Para que los recordatorios se actualicen solos)
     const channel = supabase
       .channel('dashboard-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Escuchar INSERT, UPDATE y DELETE
-          schema: 'public',
-          table: 'appointments'
-        },
-        (payload) => {
-          console.log('Cambio detectado en citas:', payload);
-          fetchDashboardData(); // <--- RECARGAR DATOS AUTOMÁTICAMENTE
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+        fetchDashboardData();
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return (
@@ -119,30 +97,30 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Grid de Tarjetas de Estadísticas */}
+      {/* Grid de Tarjetas - AHORA USANDO <LINK> PARA NAVEGACIÓN INFALIBLE */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         
-        {/* RECUADRO AZUL - PACIENTES (AHORA CLICABLE) */}
-        <div 
-          onClick={() => navigate('/patients')} // <--- ACCIÓN AL HACER CLICK
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer group"
+        {/* 1. RECUADRO AZUL - PACIENTES */}
+        <Link 
+          to="/patients" // <--- RUTA DIRECTA
+          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
               <Users className="h-6 w-6 text-blue-600" />
             </div>
             <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              <ArrowUpRight className="h-3 w-3 mr-1" /> +12%
+              <ArrowUpRight className="h-3 w-3 mr-1" /> Ver todos
             </span>
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Total Pacientes</h3>
           <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalPatients}</p>
-        </div>
+        </Link>
 
-        {/* RECUADRO NARANJA/ROJO - CITAS HOY (AHORA CLICABLE) */}
-        <div 
-          onClick={() => navigate('/agenda')} // <--- ACCIÓN AL HACER CLICK
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer group"
+        {/* 2. RECUADRO NARANJA - AGENDA DE HOY */}
+        <Link 
+          to="/agenda" 
+          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-orange-50 rounded-xl group-hover:bg-orange-100 transition-colors">
@@ -154,52 +132,54 @@ const Dashboard = () => {
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Citas para Hoy</h3>
           <p className="text-2xl font-bold text-gray-900 mt-1">{stats.todayAppointments}</p>
-        </div>
+        </Link>
 
-        {/* RECUADRO VERDE - INGRESOS (CLICABLE A CAJA) */}
-        <div 
-          onClick={() => navigate('/finance-audit')} 
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer group"
+        {/* 3. RECUADRO VERDE - FINANZAS (INGRESOS) */}
+        <Link 
+          to="/finance-audit" 
+          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
               <DollarSign className="h-6 w-6 text-green-600" />
             </div>
             <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              <ArrowUpRight className="h-3 w-3 mr-1" /> +8%
+              <ArrowUpRight className="h-3 w-3 mr-1" /> Auditoría
             </span>
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Ingresos Mes</h3>
           <p className="text-2xl font-bold text-gray-900 mt-1">$0.00</p>
-        </div>
+        </Link>
 
-        {/* RECUADRO ROJO - PENDIENTES */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        {/* 4. RECUADRO ROJO - PENDIENTES (AHORA SÍ FUNCIONA) */}
+        <Link 
+          to="/finance" 
+          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer group block"
+        >
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-red-50 rounded-xl">
+            <div className="p-3 bg-red-50 rounded-xl group-hover:bg-red-100 transition-colors">
               <Activity className="h-6 w-6 text-red-600" />
             </div>
             <span className="flex items-center text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">
-              <ArrowDownRight className="h-3 w-3 mr-1" /> -2%
+              <ArrowDownRight className="h-3 w-3 mr-1" /> Ver detalles
             </span>
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Por Cobrar</h3>
           <p className="text-2xl font-bold text-gray-900 mt-1">$0.00</p>
-        </div>
+        </Link>
       </div>
 
       {/* SECCIÓN INFERIOR - RECORDATORIOS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Lista de Próximas Citas (Recordatorios) */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-gray-900">Recordatorios de Hoy</h2>
-            <button 
-              onClick={() => navigate('/agenda')}
+            <Link 
+              to="/agenda"
               className="text-sm text-blue-600 font-medium hover:text-blue-700 hover:bg-blue-50 px-3 py-1 rounded-full transition-colors"
             >
               Ver Agenda Completa
-            </button>
+            </Link>
           </div>
 
           <div className="space-y-4">
@@ -211,9 +191,10 @@ const Dashboard = () => {
               </div>
             ) : (
               todayAppointmentsList.map((appointment) => (
-                <div 
+                <Link 
+                  to={`/agenda?focus=${appointment.id}`}
                   key={appointment.id} 
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl border border-gray-100 transition-colors group"
+                  className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl border border-gray-100 transition-colors group cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
                     <div className={`
@@ -245,31 +226,21 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Botón de Acción Rápida */}
-                  {appointment.status === 'confirmed' && (
-                    <button 
-                      onClick={() => navigate(`/agenda?focus=${appointment.id}`)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50"
-                    >
-                      Gestionar
-                    </button>
-                  )}
-                </div>
+                </Link>
               ))
             )}
           </div>
         </div>
 
-        {/* Panel Lateral (Estático por ahora) */}
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-lg p-6 text-white">
+        {/* Panel Lateral - Estado del Sistema */}
+        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-lg p-6 text-white h-fit">
           <h3 className="font-bold text-lg mb-2">Estado del Sistema</h3>
           <p className="text-blue-100 text-sm mb-6">Todo funcionando correctamente.</p>
           
           <div className="space-y-4">
             <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
               <p className="text-xs text-blue-200 uppercase tracking-wider font-semibold mb-1">Versión</p>
-              <p className="font-mono">v1.0.2 (Stable)</p>
+              <p className="font-mono">v1.0.3 (Live)</p>
             </div>
             <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm">
               <p className="text-xs text-blue-200 uppercase tracking-wider font-semibold mb-1">Base de Datos</p>
