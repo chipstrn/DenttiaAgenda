@@ -1,69 +1,67 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  User, 
-  Phone, 
-  Mail, 
-  Award,
-  Building,
-  Stethoscope
-} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Plus, Stethoscope, Edit, Trash2, Phone, Mail, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface Doctor {
   id: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
   specialty: string;
-  professional_license: string;
-  university: string;
   phone: string;
   email: string;
-  address: string;
+  license_number: string;
   is_active: boolean;
 }
 
+const specialties = [
+  'Odontología General',
+  'Ortodoncia',
+  'Endodoncia',
+  'Periodoncia',
+  'Cirugía Oral',
+  'Odontopediatría',
+  'Prostodoncia',
+  'Implantología',
+  'Estética Dental'
+];
+
 const Doctors = () => {
+  const { user } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   
-  const [formData, setFormData] = useState({
-    full_name: '',
-    specialty: '',
-    professional_license: '',
-    university: '',
-    phone: '',
-    email: '',
-    address: ''
-  });
+  // Individual form states
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [specialty, setSpecialty] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
 
-  const fetchDoctors = async () => {
-    setLoading(true);
+  const fetchDoctors = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
+      // Fetch ALL doctors (shared data)
       const { data, error } = await supabase
         .from('doctors')
         .select('*')
-        .eq('user_id', user.id)
-        .order('full_name');
+        .order('first_name', { ascending: true });
 
       if (error) throw error;
       setDoctors(data || []);
@@ -73,24 +71,42 @@ const Doctors = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDoctors();
+  }, [fetchDoctors]);
+
+  const resetForm = useCallback(() => {
+    setFirstName('');
+    setLastName('');
+    setSpecialty('');
+    setPhone('');
+    setEmail('');
+    setLicenseNumber('');
+    setEditingDoctor(null);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    if (!user?.id) return;
 
+    setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const doctorData = {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        specialty,
+        phone: phone.trim(),
+        email: email.trim(),
+        license_number: licenseNumber.trim(),
+        is_active: true
+      };
 
       if (editingDoctor) {
         const { error } = await supabase
           .from('doctors')
-          .update(formData)
+          .update(doctorData)
           .eq('id', editingDoctor.id);
 
         if (error) throw error;
@@ -98,23 +114,14 @@ const Doctors = () => {
       } else {
         const { error } = await supabase
           .from('doctors')
-          .insert({ ...formData, user_id: user.id });
+          .insert({ ...doctorData, user_id: user.id });
 
         if (error) throw error;
         toast.success('Doctor agregado');
       }
 
       setIsDialogOpen(false);
-      setEditingDoctor(null);
-      setFormData({
-        full_name: '',
-        specialty: '',
-        professional_license: '',
-        university: '',
-        phone: '',
-        email: '',
-        address: ''
-      });
+      resetForm();
       fetchDoctors();
     } catch (error) {
       console.error('Error saving doctor:', error);
@@ -124,23 +131,20 @@ const Doctors = () => {
     }
   };
 
-  const handleEdit = (doctor: Doctor) => {
+  const handleEdit = useCallback((doctor: Doctor) => {
     setEditingDoctor(doctor);
-    setFormData({
-      full_name: doctor.full_name,
-      specialty: doctor.specialty || '',
-      professional_license: doctor.professional_license || '',
-      university: doctor.university || '',
-      phone: doctor.phone || '',
-      email: doctor.email || '',
-      address: doctor.address || ''
-    });
+    setFirstName(doctor.first_name || '');
+    setLastName(doctor.last_name || '');
+    setSpecialty(doctor.specialty || '');
+    setPhone(doctor.phone || '');
+    setEmail(doctor.email || '');
+    setLicenseNumber(doctor.license_number || '');
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!confirm('¿Eliminar este doctor?')) return;
-
+    
     try {
       const { error } = await supabase
         .from('doctors')
@@ -148,13 +152,14 @@ const Doctors = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
+      setDoctors(prev => prev.filter(d => d.id !== id));
       toast.success('Doctor eliminado');
-      fetchDoctors();
     } catch (error) {
       console.error('Error deleting doctor:', error);
       toast.error('Error al eliminar');
     }
-  };
+  }, []);
 
   return (
     <MainLayout>
@@ -162,11 +167,11 @@ const Doctors = () => {
       <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Doctores</h1>
-          <p className="text-ios-gray-500 mt-1 font-medium">Gestiona la información del equipo médico</p>
+          <p className="text-ios-gray-500 mt-1 font-medium">{doctors.length} profesionales registrados</p>
         </div>
-        <button
+        <button 
           onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
+          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-indigo text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-indigo/90 transition-all duration-200 touch-feedback"
         >
           <Plus className="h-5 w-5" />
           Nuevo Doctor
@@ -176,28 +181,30 @@ const Doctors = () => {
       {/* Doctors Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="h-8 w-8 border-3 border-ios-blue/30 border-t-ios-blue rounded-full animate-spin"></div>
+          <Loader2 className="h-8 w-8 animate-spin text-ios-indigo" />
         </div>
       ) : doctors.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {doctors.map((doctor, index) => (
-            <div
-              key={doctor.id}
-              className="ios-card p-6 animate-slide-up"
+            <div 
+              key={doctor.id} 
+              className="ios-card p-5 animate-slide-up"
               style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center">
-                  <Stethoscope className="h-7 w-7 text-white" />
+                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-ios-indigo to-ios-purple flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">
+                    {doctor.first_name?.[0]}{doctor.last_name?.[0]}
+                  </span>
                 </div>
                 <div className="flex gap-1">
-                  <button
+                  <button 
                     onClick={() => handleEdit(doctor)}
                     className="h-9 w-9 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
                   >
                     <Edit className="h-4 w-4 text-ios-gray-600" />
                   </button>
-                  <button
+                  <button 
                     onClick={() => handleDelete(doctor.id)}
                     className="h-9 w-9 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
                   >
@@ -205,35 +212,33 @@ const Doctors = () => {
                   </button>
                 </div>
               </div>
-
-              <h3 className="font-bold text-lg text-ios-gray-900 mb-1">{doctor.full_name}</h3>
+              
+              <h3 className="font-bold text-ios-gray-900 text-lg">
+                Dr. {doctor.first_name} {doctor.last_name}
+              </h3>
               {doctor.specialty && (
-                <p className="text-ios-blue font-medium text-sm mb-3">{doctor.specialty}</p>
+                <span className="inline-block px-2.5 py-1 rounded-lg bg-ios-indigo/10 text-ios-indigo text-xs font-semibold mt-2">
+                  {doctor.specialty}
+                </span>
               )}
-
-              <div className="space-y-2 text-sm">
-                {doctor.professional_license && (
-                  <div className="flex items-center gap-2 text-ios-gray-600">
-                    <Award className="h-4 w-4 text-ios-gray-400" />
-                    <span>Cédula: {doctor.professional_license}</span>
-                  </div>
-                )}
-                {doctor.university && (
-                  <div className="flex items-center gap-2 text-ios-gray-600">
-                    <Building className="h-4 w-4 text-ios-gray-400" />
-                    <span>{doctor.university}</span>
-                  </div>
-                )}
+              
+              <div className="mt-4 space-y-2">
                 {doctor.phone && (
-                  <div className="flex items-center gap-2 text-ios-gray-600">
-                    <Phone className="h-4 w-4 text-ios-gray-400" />
-                    <span>{doctor.phone}</span>
+                  <div className="flex items-center gap-2 text-sm text-ios-gray-500">
+                    <Phone className="h-4 w-4" />
+                    {doctor.phone}
                   </div>
                 )}
                 {doctor.email && (
-                  <div className="flex items-center gap-2 text-ios-gray-600">
-                    <Mail className="h-4 w-4 text-ios-gray-400" />
+                  <div className="flex items-center gap-2 text-sm text-ios-gray-500">
+                    <Mail className="h-4 w-4" />
                     <span className="truncate">{doctor.email}</span>
+                  </div>
+                )}
+                {doctor.license_number && (
+                  <div className="flex items-center gap-2 text-sm text-ios-gray-500">
+                    <Stethoscope className="h-4 w-4" />
+                    Cédula: {doctor.license_number}
                   </div>
                 )}
               </div>
@@ -245,11 +250,11 @@ const Doctors = () => {
           <div className="h-20 w-20 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
             <Stethoscope className="h-10 w-10 text-ios-gray-400" />
           </div>
-          <p className="text-ios-gray-900 font-semibold">Sin doctores registrados</p>
-          <p className="text-ios-gray-500 text-sm mt-1">Agrega la información de tu equipo médico</p>
-          <button
+          <p className="text-ios-gray-900 font-semibold">Sin doctores</p>
+          <p className="text-ios-gray-500 text-sm mt-1">Agrega profesionales a tu equipo</p>
+          <button 
             onClick={() => setIsDialogOpen(true)}
-            className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
+            className="mt-4 text-ios-indigo font-semibold text-sm hover:opacity-70 transition-opacity"
           >
             Agregar doctor
           </button>
@@ -259,116 +264,107 @@ const Doctors = () => {
       {/* Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         setIsDialogOpen(open);
-        if (!open) {
-          setEditingDoctor(null);
-          setFormData({
-            full_name: '',
-            specialty: '',
-            professional_license: '',
-            university: '',
-            phone: '',
-            email: '',
-            address: ''
-          });
-        }
+        if (!open) resetForm();
       }}>
-        <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-bold text-ios-gray-900">
               {editingDoctor ? 'Editar Doctor' : 'Nuevo Doctor'}
             </DialogTitle>
+            <DialogDescription className="text-ios-gray-500">
+              {editingDoctor ? 'Modifica los datos' : 'Agrega un profesional'}
+            </DialogDescription>
           </DialogHeader>
-
+          
           <form onSubmit={handleSubmit}>
             <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Nombre Completo *</Label>
-                <input
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  required
-                  className="ios-input"
-                  placeholder="Dr. Juan Pérez García"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Especialidad</Label>
-                <input
-                  value={formData.specialty}
-                  onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                  className="ios-input"
-                  placeholder="Odontología General, Ortodoncia, etc."
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Cédula Profesional</Label>
+                  <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
                   <input
-                    value={formData.professional_license}
-                    onChange={(e) => setFormData({ ...formData, professional_license: e.target.value })}
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Nombre"
+                    required
                     className="ios-input"
-                    placeholder="12345678"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
+                  <Label className="text-sm font-medium text-ios-gray-600">Apellido *</Label>
                   <input
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Apellido"
+                    required
                     className="ios-input"
-                    placeholder="2381234567"
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Universidad</Label>
-                <input
-                  value={formData.university}
-                  onChange={(e) => setFormData({ ...formData, university: e.target.value })}
+                <Label className="text-sm font-medium text-ios-gray-600">Especialidad</Label>
+                <select
+                  value={specialty}
+                  onChange={(e) => setSpecialty(e.target.value)}
                   className="ios-input"
-                  placeholder="Benemérita Universidad Autónoma de Puebla"
+                >
+                  <option value="">Seleccionar</option>
+                  {specialties.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(000) 000-0000"
+                  className="ios-input"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Email</Label>
                 <input
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="ios-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="doctor@clinica.com"
+                  className="ios-input"
                 />
               </div>
-
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Dirección del Consultorio</Label>
+                <Label className="text-sm font-medium text-ios-gray-600">Cédula Profesional</Label>
                 <input
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  value={licenseNumber}
+                  onChange={(e) => setLicenseNumber(e.target.value)}
+                  placeholder="Número de cédula"
                   className="ios-input"
-                  placeholder="Calle, Número, Colonia, Ciudad"
                 />
               </div>
             </div>
-
+            
             <div className="p-6 pt-4 flex gap-3">
-              <button
-                type="button"
+              <button 
+                type="button" 
                 onClick={() => setIsDialogOpen(false)}
                 className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
               >
                 Cancelar
               </button>
-              <button
+              <button 
                 type="submit"
                 disabled={saving}
-                className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
+                className="flex-1 h-12 rounded-xl bg-ios-indigo text-white font-semibold hover:bg-ios-indigo/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {saving ? 'Guardando...' : editingDoctor ? 'Guardar' : 'Crear'}
+                {saving ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  editingDoctor ? 'Guardar' : 'Agregar'
+                )}
               </button>
             </div>
           </form>
