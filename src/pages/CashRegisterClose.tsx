@@ -8,10 +8,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   Banknote, CreditCard, ArrowUpRight, Send, 
-  Loader2, CheckCircle, Clock, Plus, Trash2, Shield
+  Loader2, CheckCircle, Clock, Plus, Trash2, Shield, RefreshCw, XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, isToday, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +35,7 @@ const CashRegisterClose = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [existingRegister, setExistingRegister] = useState<any>(null);
+  const [showNewShiftForm, setShowNewShiftForm] = useState(false);
   
   // Formulario de corte - Individual states
   const [openingBalance, setOpeningBalance] = useState('');
@@ -64,29 +65,68 @@ const CashRegisterClose = () => {
     if (!user?.id || isAdmin) return;
 
     try {
+      // Get the most recent register for this user
       const { data, error } = await supabase
         .from('cash_registers')
         .select('*')
         .eq('cashier_id', user.id)
-        .eq('register_date', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) {
         console.error('Error checking register:', error);
+        setLoading(false);
         return;
       }
 
       if (data) {
-        setExistingRegister(data);
+        // Check if the register is from today
+        const registerDate = parseISO(data.register_date);
+        const isFromToday = isToday(registerDate);
+        
+        // Only show existing register status if it's from today
+        if (isFromToday) {
+          setExistingRegister(data);
+        } else {
+          // Register is from a previous day, allow new register
+          setExistingRegister(null);
+        }
       }
     } catch (error) {
       console.error('Error in checkExistingRegister:', error);
     } finally {
       setLoading(false);
     }
-  }, [today, user?.id, isAdmin]);
+  }, [user?.id, isAdmin]);
 
   useEffect(() => {
+    checkExistingRegister();
+  }, [checkExistingRegister]);
+
+  const resetForm = useCallback(() => {
+    setOpeningBalance('');
+    setServicesCash('');
+    setServicesCard('');
+    setServicesTransfer('');
+    setProductsCash('');
+    setProductsCard('');
+    setProductsTransfer('');
+    setOtherIncome('');
+    setOtherIncomeNotes('');
+    setExpenses([]);
+    setWithdrawals([]);
+  }, []);
+
+  const handleStartNewShift = useCallback(() => {
+    // Reset form and show new shift form
+    resetForm();
+    setExistingRegister(null);
+    setShowNewShiftForm(true);
+  }, [resetForm]);
+
+  const handleCancelNewShift = useCallback(() => {
+    setShowNewShiftForm(false);
     checkExistingRegister();
   }, [checkExistingRegister]);
 
@@ -214,6 +254,7 @@ const CashRegisterClose = () => {
 
       toast.success('Corte enviado a revisión');
       setExistingRegister(registerData);
+      setShowNewShiftForm(false);
     } catch (error: any) {
       console.error('Error submitting cash register:', error);
       toast.error(error.message || 'Error al enviar corte');
@@ -250,12 +291,12 @@ const CashRegisterClose = () => {
     );
   }
 
-  // Si ya existe un corte para hoy - MODO CIEGO para recepción
-  if (existingRegister) {
+  // Si ya existe un corte para hoy y NO estamos mostrando el formulario de nuevo turno
+  if (existingRegister && !showNewShiftForm) {
     return (
       <MainLayout>
         <div className="max-w-2xl mx-auto">
-          <div className="text-center py-16 animate-scale-in">
+          <div className="text-center py-12 animate-scale-in">
             <div className={cn(
               "h-24 w-24 rounded-full flex items-center justify-center mx-auto mb-6",
               existingRegister.status === 'approved' ? 'bg-ios-green/15' :
@@ -264,7 +305,7 @@ const CashRegisterClose = () => {
               {existingRegister.status === 'approved' ? (
                 <CheckCircle className="h-12 w-12 text-ios-green" />
               ) : existingRegister.status === 'rejected' ? (
-                <CheckCircle className="h-12 w-12 text-ios-red" />
+                <XCircle className="h-12 w-12 text-ios-red" />
               ) : (
                 <Clock className="h-12 w-12 text-ios-orange" />
               )}
@@ -274,7 +315,7 @@ const CashRegisterClose = () => {
               {existingRegister.status === 'approved' ? 'Corte Aprobado' :
                existingRegister.status === 'rejected' ? 'Corte Rechazado' : 'Corte Enviado a Revisión'}
             </h1>
-            <p className="text-ios-gray-500 mb-8">
+            <p className="text-ios-gray-500 mb-6">
               {existingRegister.status === 'pending' 
                 ? 'Tu corte de caja está pendiente de revisión por el administrador.'
                 : existingRegister.status === 'approved'
@@ -282,12 +323,16 @@ const CashRegisterClose = () => {
                 : 'El administrador ha rechazado tu corte. Revisa las notas.'}
             </p>
 
-            <div className="ios-card p-6 text-left">
+            <div className="ios-card p-6 text-left mb-6">
               <h3 className="font-semibold text-ios-gray-900 mb-4">Resumen del Corte</h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-ios-gray-500">Fecha</span>
                   <span className="font-medium">{format(new Date(existingRegister.register_date), "d 'de' MMMM, yyyy", { locale: es })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-ios-gray-500">Hora de envío</span>
+                  <span className="font-medium">{format(new Date(existingRegister.created_at), "HH:mm", { locale: es })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-ios-gray-500">Saldo Inicial</span>
@@ -308,26 +353,49 @@ const CashRegisterClose = () => {
             </div>
 
             {existingRegister.status === 'pending' && (
-              <div className="mt-6 p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20">
+              <div className="mb-6 p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20">
                 <p className="text-sm text-ios-orange font-medium">
                   ⏳ El administrador revisará tu corte y te notificará el resultado.
                 </p>
               </div>
             )}
+
+            {/* Botón para iniciar nuevo turno - SIEMPRE VISIBLE */}
+            <button
+              onClick={handleStartNewShift}
+              className="w-full h-14 rounded-2xl bg-ios-blue text-white font-bold text-lg shadow-ios-lg hover:bg-ios-blue/90 transition-all duration-200 touch-feedback flex items-center justify-center gap-3"
+            >
+              <RefreshCw className="h-6 w-6" />
+              Iniciar Nuevo Turno
+            </button>
+            
+            <p className="text-sm text-ios-gray-400 mt-3">
+              Puedes registrar múltiples cortes (turnos) en un mismo día
+            </p>
           </div>
         </div>
       </MainLayout>
     );
   }
 
+  // Formulario de corte (nuevo o primer turno del día)
   return (
     <MainLayout>
       {/* Header */}
       <div className="mb-8 animate-fade-in">
-        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Corte de Caja</h1>
+        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">
+          {showNewShiftForm ? 'Nuevo Turno' : 'Corte de Caja'}
+        </h1>
         <p className="text-ios-gray-500 mt-1 font-medium">
           {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
         </p>
+        {showNewShiftForm && (
+          <div className="mt-3 p-3 rounded-xl bg-ios-blue/10 border border-ios-blue/20">
+            <p className="text-sm text-ios-blue font-medium">
+              📋 Registrando un nuevo turno para hoy
+            </p>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
@@ -652,6 +720,17 @@ const CashRegisterClose = () => {
             </>
           )}
         </button>
+
+        {/* Cancel new shift button */}
+        {showNewShiftForm && (
+          <button
+            type="button"
+            onClick={handleCancelNewShift}
+            className="w-full h-12 rounded-xl bg-ios-gray-100 text-ios-gray-600 font-semibold hover:bg-ios-gray-200 transition-all duration-200 touch-feedback"
+          >
+            Cancelar
+          </button>
+        )}
       </form>
     </MainLayout>
   );
