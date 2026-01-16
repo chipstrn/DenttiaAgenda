@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
+import PatientIntake from "./pages/PatientIntake";
+import PatientAnamnesis from "./pages/PatientAnamnesis";
 import Agenda from "./pages/Agenda";
 import Treatments from "./pages/Treatments";
 import Finance from "./pages/Finance";
@@ -39,6 +41,25 @@ const App = () => (
           <Route path="/patients" element={
             <ProtectedRoute>
               <Patients />
+            </ProtectedRoute>
+          } />
+          
+          {/* Patient Intake Flow */}
+          <Route path="/patient/new" element={
+            <ProtectedRoute>
+              <PatientIntake />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/patient/:patientId/intake" element={
+            <ProtectedRoute>
+              <PatientIntake />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/patient/:patientId/anamnesis" element={
+            <ProtectedRoute>
+              <PatientAnamnesis />
             </ProtectedRoute>
           } />
           

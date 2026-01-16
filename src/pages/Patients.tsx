@@ -14,10 +14,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Edit, Trash2, User, Phone, Mail, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, User, Phone, Mail, ChevronRight, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 interface Patient {
   id: string;
@@ -32,6 +33,7 @@ interface Patient {
 }
 
 const Patients = () => {
+  const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -160,7 +162,7 @@ const Patients = () => {
           <p className="text-ios-gray-500 mt-1 font-medium">{patients.length} pacientes registrados</p>
         </div>
         <button 
-          onClick={() => setIsDialogOpen(true)}
+          onClick={() => navigate('/patient/new')}
           className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
         >
           <Plus className="h-5 w-5" />
@@ -195,6 +197,7 @@ const Patients = () => {
                 key={patient.id}
                 className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in"
                 style={{ animationDelay: `${150 + index * 30}ms` }}
+                onClick={() => navigate(`/patient/${patient.id}/intake`)}
               >
                 <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center flex-shrink-0">
                   <span className="text-white font-semibold">
@@ -224,7 +227,14 @@ const Patients = () => {
 
                 <div className="flex items-center gap-2">
                   <button 
-                    onClick={(e) => { e.stopPropagation(); handleEdit(patient); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/anamnesis`); }}
+                    className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green/20 transition-colors touch-feedback"
+                    title="Anamnesis"
+                  >
+                    <FileText className="h-4 w-4 text-ios-green" />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); navigate(`/patient/${patient.id}/intake`); }}
                     className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
                   >
                     <Edit className="h-4 w-4 text-ios-gray-600" />
@@ -247,7 +257,7 @@ const Patients = () => {
             <p className="text-ios-gray-900 font-semibold">No hay pacientes</p>
             <p className="text-ios-gray-500 text-sm mt-1">Comienza agregando tu primer paciente</p>
             <button 
-              onClick={() => setIsDialogOpen(true)}
+              onClick={() => navigate('/patient/new')}
               className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
             >
               Agregar paciente
@@ -255,122 +265,6 @@ const Patients = () => {
           </div>
         )}
       </div>
-
-      {/* Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={(open) => {
-        setIsDialogOpen(open);
-        if (!open) {
-          setEditingPatient(null);
-          setFormData({
-            first_name: '',
-            last_name: '',
-            email: '',
-            phone: '',
-            date_of_birth: '',
-            address: '',
-            medical_history: ''
-          });
-        }
-      }}>
-        <DialogContent className="sm:max-w-[500px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-xl font-bold text-ios-gray-900">
-              {editingPatient ? 'Editar Paciente' : 'Nuevo Paciente'}
-            </DialogTitle>
-            <DialogDescription className="text-ios-gray-500">
-              {editingPatient ? 'Modifica los datos del paciente' : 'Ingresa los datos del nuevo paciente'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <form onSubmit={handleSubmit}>
-            <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Nombre *</Label>
-                  <input
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    required
-                    className="ios-input"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Apellido *</Label>
-                  <input
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    required
-                    className="ios-input"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Email</Label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="ios-input"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
-                  <input
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="ios-input"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Fecha de Nacimiento</Label>
-                  <input
-                    type="date"
-                    value={formData.date_of_birth}
-                    onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                    className="ios-input"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Dirección</Label>
-                  <input
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="ios-input"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-ios-gray-600">Historial Médico</Label>
-                <textarea
-                  value={formData.medical_history}
-                  onChange={(e) => setFormData({ ...formData, medical_history: e.target.value })}
-                  rows={3}
-                  className="ios-input resize-none"
-                />
-              </div>
-            </div>
-            
-            <div className="p-6 pt-4 flex gap-3">
-              <button 
-                type="button" 
-                onClick={() => setIsDialogOpen(false)}
-                className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
-              >
-                Cancelar
-              </button>
-              <button 
-                type="submit"
-                className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback"
-              >
-                {editingPatient ? 'Guardar' : 'Crear'}
-              </button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </MainLayout>
   );
 };
