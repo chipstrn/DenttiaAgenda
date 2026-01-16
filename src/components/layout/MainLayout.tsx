@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext'; // Si usas el botón de salir
 
 "use client";
 
