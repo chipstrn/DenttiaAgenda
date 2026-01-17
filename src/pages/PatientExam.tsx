@@ -74,6 +74,7 @@ interface ClinicalNote {
   profiles?: {
     first_name: string;
     last_name: string;
+    role: string;
   };
 }
 
@@ -157,7 +158,8 @@ const PatientExam = () => {
           .from('clinical_notes')
           .select(`
             *,
-            profiles:user_id (first_name, last_name)
+            *,
+            profiles:user_id (first_name, last_name, role)
           `)
           .eq('patient_id', patientId)
           .order('note_date', { ascending: false })
@@ -173,7 +175,7 @@ const PatientExam = () => {
       });
       setTeeth(teethMap);
       setTreatments(treatmentsResult.data || []);
-      setNotes(patientResult && treatmentsResult ? (await supabase.from('clinical_notes').select('*, profiles:user_id(first_name, last_name)').eq('patient_id', patientId).order('note_date', { ascending: false })).data || [] : []);
+      setNotes(patientResult && treatmentsResult ? (await supabase.from('clinical_notes').select('*, profiles:user_id(first_name, last_name, role)').eq('patient_id', patientId).order('note_date', { ascending: false })).data || [] : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -320,7 +322,7 @@ const PatientExam = () => {
         })
         .select(`
           *,
-          profiles:user_id (first_name, last_name)
+          profiles:user_id (first_name, last_name, role)
         `)
         .single();
 
@@ -580,7 +582,18 @@ const PatientExam = () => {
                         </div>
                         <div>
                           <p className="font-semibold text-ios-gray-900 text-sm">
-                            Dr. {note.profiles?.first_name} {note.profiles?.last_name}
+                            {(() => {
+                              const role = note.profiles?.role;
+                              let prefix = '';
+                              if (role === 'doctor') prefix = 'Dr.';
+                              else if (role === 'admin') prefix = 'Admin';
+                              else if (role === 'recepcion') prefix = 'Recepción';
+
+                              if (prefix === 'Recepción') {
+                                return `${prefix} - ${note.profiles?.first_name} ${note.profiles?.last_name}`;
+                              }
+                              return `${prefix} ${note.profiles?.first_name} ${note.profiles?.last_name}`;
+                            })()}
                           </p>
                           <div className="flex items-center gap-3 text-xs text-ios-gray-500 mt-0.5">
                             <span className="flex items-center gap-1">
