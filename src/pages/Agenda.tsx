@@ -511,15 +511,15 @@ const Agenda = () => {
   return (
     <MainLayout>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Agenda</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">Gestiona las citas de la clínica</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           {/* Location Selector */}
           <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-            <SelectTrigger className="w-[180px] h-11 rounded-xl bg-white border-0 shadow-ios-sm">
+            <SelectTrigger className="w-full sm:w-[180px] h-11 rounded-xl bg-white border-0 shadow-ios-sm">
               <MapPin className="h-4 w-4 mr-2 text-ios-gray-500" />
               <SelectValue placeholder="Todas las sedes" />
             </SelectTrigger>
@@ -533,7 +533,7 @@ const Agenda = () => {
 
           <button
             onClick={() => setIsDialogOpen(true)}
-            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
+            className="flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
           >
             <Plus className="h-5 w-5" />
             Nuevo
@@ -655,19 +655,19 @@ const Agenda = () => {
         <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '150ms' }}>
           {/* Date Header with View Toggle */}
           <div className="p-5 border-b border-ios-gray-100 bg-gradient-to-r from-ios-gray-50 to-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
                 <button
                   onClick={() => setSelectedDate(subDays(selectedDate, 1))}
                   className="h-9 w-9 rounded-xl bg-white border border-ios-gray-200 flex items-center justify-center hover:bg-ios-gray-50 transition-colors touch-feedback"
                 >
                   <ChevronLeft className="h-4 w-4 text-ios-gray-600" />
                 </button>
-                <div>
-                  <h2 className="text-2xl font-bold text-ios-gray-900 capitalize">
+                <div className="text-center md:text-left">
+                  <h2 className="text-xl md:text-2xl font-bold text-ios-gray-900 capitalize leading-none">
                     {format(selectedDate, "EEEE", { locale: es })}
                   </h2>
-                  <p className="text-ios-gray-500 font-medium">
+                  <p className="text-ios-gray-500 font-medium text-sm md:text-base mt-1">
                     {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
                   </p>
                 </div>
@@ -679,7 +679,7 @@ const Agenda = () => {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
                 {/* Today Button */}
                 <button
                   onClick={() => setSelectedDate(new Date())}
@@ -688,46 +688,48 @@ const Agenda = () => {
                   Hoy
                 </button>
 
-                {/* Calendar Toggle */}
-                <button
-                  onClick={() => setShowCalendar(!showCalendar)}
-                  className={cn(
-                    "h-9 w-9 rounded-xl flex items-center justify-center transition-colors touch-feedback",
-                    showCalendar
-                      ? "bg-ios-blue text-white"
-                      : "bg-white border border-ios-gray-200 text-ios-gray-600 hover:bg-ios-gray-50"
-                  )}
-                  title="Mostrar calendario"
-                >
-                  <CalendarIcon className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Calendar Toggle */}
+                  <button
+                    onClick={() => setShowCalendar(!showCalendar)}
+                    className={cn(
+                      "h-9 w-9 rounded-xl flex items-center justify-center transition-colors touch-feedback",
+                      showCalendar
+                        ? "bg-ios-blue text-white"
+                        : "bg-white border border-ios-gray-200 text-ios-gray-600 hover:bg-ios-gray-50"
+                    )}
+                    title="Mostrar calendario"
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                  </button>
 
-                {/* View Toggle */}
-                <div className="flex items-center bg-ios-gray-100 rounded-xl p-1">
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={cn(
-                      "h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all",
-                      viewMode === 'list'
-                        ? "bg-white text-ios-gray-900 shadow-sm"
-                        : "text-ios-gray-500 hover:text-ios-gray-700"
-                    )}
-                  >
-                    <LayoutList className="h-3.5 w-3.5" />
-                    Lista
-                  </button>
-                  <button
-                    onClick={() => setViewMode('timeline')}
-                    className={cn(
-                      "h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all",
-                      viewMode === 'timeline'
-                        ? "bg-white text-ios-gray-900 shadow-sm"
-                        : "text-ios-gray-500 hover:text-ios-gray-700"
-                    )}
-                  >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                    Timeline
-                  </button>
+                  {/* View Toggle */}
+                  <div className="flex items-center bg-ios-gray-100 rounded-xl p-1">
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={cn(
+                        "h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all",
+                        viewMode === 'list'
+                          ? "bg-white text-ios-gray-900 shadow-sm"
+                          : "text-ios-gray-500 hover:text-ios-gray-700"
+                      )}
+                    >
+                      <LayoutList className="h-3.5 w-3.5" />
+                      Lista
+                    </button>
+                    <button
+                      onClick={() => setViewMode('timeline')}
+                      className={cn(
+                        "h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all",
+                        viewMode === 'timeline'
+                          ? "bg-white text-ios-gray-900 shadow-sm"
+                          : "text-ios-gray-500 hover:text-ios-gray-700"
+                      )}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                      Timeline
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -802,44 +804,46 @@ const Agenda = () => {
                           />
                         )}
 
-                        <div className="flex items-center gap-4 p-4 pl-5">
-                          <div className="text-center min-w-[65px]">
-                            <div className={cn(
-                              "inline-flex flex-col items-center px-3 py-2 rounded-xl",
-                              apt.type === 'personal'
-                                ? "bg-ios-gray-200"
-                                : "bg-gradient-to-br from-ios-gray-50 to-white border border-ios-gray-100"
-                            )}>
-                              <p className="text-lg font-bold text-ios-gray-900 leading-none">
-                                {format(new Date(apt.start_time), 'HH:mm')}
-                              </p>
-                              <div className="h-px w-4 bg-ios-gray-300 my-1" />
-                              <p className="text-xs text-ios-gray-500 leading-none">
-                                {format(new Date(apt.end_time), 'HH:mm')}
-                              </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 pl-5">
+                          <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
+                            <div className="text-center min-w-[65px]">
+                              <div className={cn(
+                                "inline-flex flex-col items-center px-3 py-2 rounded-xl",
+                                apt.type === 'personal'
+                                  ? "bg-ios-gray-200"
+                                  : "bg-gradient-to-br from-ios-gray-50 to-white border border-ios-gray-100"
+                              )}>
+                                <p className="text-lg font-bold text-ios-gray-900 leading-none">
+                                  {format(new Date(apt.start_time), 'HH:mm')}
+                                </p>
+                                <div className="h-px w-4 bg-ios-gray-300 my-1" />
+                                <p className="text-xs text-ios-gray-500 leading-none">
+                                  {format(new Date(apt.end_time), 'HH:mm')}
+                                </p>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-ios-gray-900 truncate">{apt.title}</p>
-                              {apt.type === 'personal' && (
-                                <span className="px-2 py-0.5 rounded-full bg-ios-gray-300/50 text-ios-gray-600 text-xs font-medium flex items-center gap-1">
-                                  <Coffee className="h-3 w-3" />
-                                  Personal
-                                </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-ios-gray-900 truncate">{apt.title}</p>
+                                {apt.type === 'personal' && (
+                                  <span className="px-2 py-0.5 rounded-full bg-ios-gray-300/50 text-ios-gray-600 text-xs font-medium flex items-center gap-1">
+                                    <Coffee className="h-3 w-3" />
+                                    Personal
+                                  </span>
+                                )}
+                              </div>
+                              {apt.type !== 'personal' && apt.patients && (
+                                <p className="text-sm text-ios-gray-500 flex items-center gap-1.5 mt-1">
+                                  <User className="h-3.5 w-3.5" />
+                                  <span className="font-medium">{apt.patients.first_name} {apt.patients.last_name}</span>
+                                </p>
                               )}
                             </div>
-                            {apt.type !== 'personal' && apt.patients && (
-                              <p className="text-sm text-ios-gray-500 flex items-center gap-1.5 mt-1">
-                                <User className="h-3.5 w-3.5" />
-                                <span className="font-medium">{apt.patients.first_name} {apt.patients.last_name}</span>
-                              </p>
-                            )}
                           </div>
 
                           {apt.type !== 'personal' && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 border-ios-gray-100 pt-3 sm:pt-0">
                               <button
                                 onClick={() => sendWhatsAppReminder(apt)}
                                 className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green hover:text-white transition-all touch-feedback"
@@ -847,7 +851,7 @@ const Agenda = () => {
                                 <MessageCircle className="h-4 w-4 text-ios-green" />
                               </button>
                               <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
-                                <SelectTrigger className={cn("w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", getStatusStyle(apt.status))}>
+                                <SelectTrigger className={cn("w-full sm:w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", getStatusStyle(apt.status))}>
                                   {statusOption && <statusOption.icon className="h-3.5 w-3.5 mr-1.5" />}
                                   <SelectValue />
                                 </SelectTrigger>
@@ -891,213 +895,214 @@ const Agenda = () => {
               /* TIMELINE VIEW - Time Blocking */
               <div className="relative">
                 {/* Time Grid */}
-                <div className="flex">
-                  {/* Time Labels */}
-                  <div className="w-16 flex-shrink-0">
+                <div className="flex bg-white">
+                  {/* Time Labels - Fixed */}
+                  <div className="w-16 flex-shrink-0 border-r border-ios-gray-100 bg-white z-20">
                     {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
-                      <div key={hour} className="h-16 flex items-start justify-end pr-3 pt-0.5">
-                        <span className="text-xs text-ios-gray-400 font-medium">
+                      <div key={hour} className="h-16 flex items-start justify-end pr-3 pt-0.5 relative">
+                        <span className="text-xs text-ios-gray-400 font-medium sticky left-0">
                           {hour.toString().padStart(2, '0')}:00
                         </span>
                       </div>
                     ))}
                   </div>
 
-                  {/* Timeline Grid */}
-                  <div className="flex-1 relative border-l border-ios-gray-200">
-                    {/* Hour Lines - Clickable for new appointments */}
-                    {Array.from({ length: 13 }, (_, i) => {
-                      const hour = i + 8;
-                      return (
-                        <div
-                          key={i}
-                          className="h-16 border-b border-ios-gray-100 hover:bg-ios-blue/5 transition-colors cursor-pointer group relative"
-                          onDoubleClick={() => {
-                            // Set the time for the new appointment
-                            const clickedTime = `${hour.toString().padStart(2, '0')}:00`;
-                            const endHour = Math.min(hour + 1, 20);
-                            const clickedEndTime = `${endHour.toString().padStart(2, '0')}:00`;
-                            setStartTime(clickedTime);
-                            setEndTime(clickedEndTime);
-                            setAppointmentDate(format(selectedDate, 'yyyy-MM-dd'));
-                            setIsDialogOpen(true);
-                          }}
-                        >
-                          {/* Visual hint on hover */}
-                          <div className="absolute inset-x-2 inset-y-1 rounded-lg border-2 border-dashed border-ios-blue/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <span className="text-xs text-ios-blue font-medium opacity-0 group-hover:opacity-100">
-                              + Doble click para agendar
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Appointments as Blocks - with overlap handling */}
-                    {(() => {
-                      // Calculate overlaps for organic positioning
-                      const sortedApts = [...filteredAppointments].sort((a, b) =>
-                        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-                      );
-
-                      // Group overlapping appointments
-                      const overlapGroups: Appointment[][] = [];
-                      sortedApts.forEach(apt => {
-                        const aptStart = new Date(apt.start_time).getTime();
-                        const aptEnd = new Date(apt.end_time).getTime();
-
-                        // Find if this appointment overlaps with any existing group
-                        let foundGroup = false;
-                        for (const group of overlapGroups) {
-                          const groupStart = Math.min(...group.map(a => new Date(a.start_time).getTime()));
-                          const groupEnd = Math.max(...group.map(a => new Date(a.end_time).getTime()));
-
-                          // Check if appointment overlaps with group's time range
-                          if (aptStart < groupEnd && aptEnd > groupStart) {
-                            group.push(apt);
-                            foundGroup = true;
-                            break;
-                          }
-                        }
-
-                        if (!foundGroup) {
-                          overlapGroups.push([apt]);
-                        }
-                      });
-
-                      // Create position map
-                      const positionMap = new Map<string, { left: string; width: string }>();
-                      overlapGroups.forEach(group => {
-                        const count = group.length;
-                        group.forEach((apt, idx) => {
-                          const width = `${100 / count - 1}%`;
-                          const left = `${(idx * 100) / count}%`;
-                          positionMap.set(apt.id, { left, width });
-                        });
-                      });
-
-                      return filteredAppointments.map((apt) => {
-                        const startHour = new Date(apt.start_time).getHours();
-                        const startMinutes = new Date(apt.start_time).getMinutes();
-                        const endHour = new Date(apt.end_time).getHours();
-                        const endMinutes = new Date(apt.end_time).getMinutes();
-
-                        const top = ((startHour - 8) * 64) + (startMinutes / 60 * 64);
-                        const duration = ((endHour - startHour) * 60 + (endMinutes - startMinutes));
-                        const height = Math.max(48, duration / 60 * 64);
-
-                        const doctorColor = doctors.find(d => d.id === apt.doctor_id)?.color || '#007AFF';
-                        const position = positionMap.get(apt.id) || { left: '0%', width: '100%' };
-
-                        if (startHour < 8 || startHour > 20) return null;
-
+                  {/* Timeline Grid - Scrollable on mobile */}
+                  <div className="flex-1 overflow-x-auto">
+                    <div className="relative min-w-[300px] md:min-w-0 h-full">
+                      {/* Hour Lines - Clickable for new appointments */}
+                      {Array.from({ length: 13 }, (_, i) => {
+                        const hour = i + 8;
                         return (
                           <div
-                            key={apt.id}
-                            className={cn(
-                              "absolute rounded-xl p-2 cursor-pointer transition-all hover:scale-[1.02] hover:z-10 shadow-sm",
-                              apt.type === 'personal' ? "bg-ios-gray-200/80" : ""
-                            )}
-                            style={{
-                              top: `${top}px`,
-                              height: `${height}px`,
-                              left: `calc(${position.left} + 4px)`,
-                              width: `calc(${position.width} - 8px)`,
-                              backgroundColor: apt.type !== 'personal' ? `${doctorColor}20` : undefined,
-                              borderLeft: apt.type !== 'personal' ? `3px solid ${doctorColor}` : '3px solid #8E8E93'
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                            }}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              // Pre-fill form with appointment data
-                              setEditingAppointmentId(apt.id);
-                              setAppointmentType(apt.type);
-                              if (apt.type === 'medical') {
-                                setTitle(apt.title);
-                                setDescription(apt.description || '');
-                                setSelectedPatientId(apt.patient_id || '');
-                                setSelectedDoctorId(apt.doctor_id || '');
-                                setSelectedTreatmentId(apt.treatment_type || '');
-                                setStatus(apt.status);
-                              } else {
-                                setEventTitle(apt.title);
-                                setEventDescription(apt.description || '');
-                              }
-                              setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
-                              setStartTime(format(new Date(apt.start_time), 'HH:mm'));
-                              setEndTime(format(new Date(apt.end_time), 'HH:mm'));
+                            key={i}
+                            className="h-16 border-b border-ios-gray-100 hover:bg-ios-blue/5 transition-colors cursor-pointer group relative"
+                            onDoubleClick={() => {
+                              // Set the time for the new appointment
+                              const clickedTime = `${hour.toString().padStart(2, '0')}:00`;
+                              const endHour = Math.min(hour + 1, 20);
+                              const clickedEndTime = `${endHour.toString().padStart(2, '0')}:00`;
+                              setStartTime(clickedTime);
+                              setEndTime(clickedEndTime);
+                              setAppointmentDate(format(selectedDate, 'yyyy-MM-dd'));
                               setIsDialogOpen(true);
                             }}
                           >
-                            <div className="flex items-start justify-between h-full">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-ios-gray-900 truncate">{apt.title}</p>
-                                {apt.patients && height > 50 && (
-                                  <p className="text-xs text-ios-gray-600 truncate mt-0.5">
-                                    {apt.patients.first_name} {apt.patients.last_name}
-                                  </p>
-                                )}
-                                {height > 70 && (
-                                  <p className="text-xs text-ios-gray-400 mt-1">
-                                    {format(new Date(apt.start_time), 'HH:mm')} - {format(new Date(apt.end_time), 'HH:mm')}
-                                  </p>
-                                )}
-                              </div>
-                              <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
-                                <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
-                                  {STATUS_OPTIONS.find(s => s.value === apt.status) && (
-                                    <div className="h-2 w-2 rounded-full bg-current" />
-                                  )}
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl">
-                                  {STATUS_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      <span className={cn("flex items-center gap-2", option.color)}>
-                                        <option.icon className="h-3 w-3" />
-                                        {option.label}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                            {/* Visual hint on hover */}
+                            <div className="absolute inset-x-2 inset-y-1 rounded-lg border-2 border-dashed border-ios-blue/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-xs text-ios-blue font-medium opacity-0 group-hover:opacity-100">
+                                + Doble click para agendar
+                              </span>
                             </div>
                           </div>
                         );
-                      });
-                    })()}
+                      })}
 
-                    {/* Current Time Indicator */}
-                    {isSameDay(selectedDate, new Date()) && (
-                      <div
-                        className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
-                        style={{
-                          top: `${((new Date().getHours() - 8) * 64) + (new Date().getMinutes() / 60 * 64)}px`
-                        }}
-                      >
-                        <div className="h-3 w-3 rounded-full bg-ios-red -ml-1.5" />
-                        <div className="flex-1 h-0.5 bg-ios-red" />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                      {/* Appointments as Blocks - with overlap handling */}
+                      {(() => {
+                        // Calculate overlaps for organic positioning
+                        const sortedApts = [...filteredAppointments].sort((a, b) =>
+                          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                        );
 
-                {/* Empty State for Timeline */}
-                {filteredAppointments.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm pointer-events-none">
-                    <div className="text-center">
-                      <p className="text-ios-gray-500">Sin citas programadas</p>
-                      <p className="text-xs text-ios-gray-400 mt-1">Doble click en cualquier hora para agendar</p>
+                        // Group overlapping appointments
+                        const overlapGroups: Appointment[][] = [];
+                        sortedApts.forEach(apt => {
+                          const aptStart = new Date(apt.start_time).getTime();
+                          const aptEnd = new Date(apt.end_time).getTime();
+
+                          // Find if this appointment overlaps with any existing group
+                          let foundGroup = false;
+                          for (const group of overlapGroups) {
+                            const groupStart = Math.min(...group.map(a => new Date(a.start_time).getTime()));
+                            const groupEnd = Math.max(...group.map(a => new Date(a.end_time).getTime()));
+
+                            // Check if appointment overlaps with group's time range
+                            if (aptStart < groupEnd && aptEnd > groupStart) {
+                              group.push(apt);
+                              foundGroup = true;
+                              break;
+                            }
+                          }
+
+                          if (!foundGroup) {
+                            overlapGroups.push([apt]);
+                          }
+                        });
+
+                        // Create position map
+                        const positionMap = new Map<string, { left: string; width: string }>();
+                        overlapGroups.forEach(group => {
+                          const count = group.length;
+                          group.forEach((apt, idx) => {
+                            const width = `${100 / count - 1}%`;
+                            const left = `${(idx * 100) / count}%`;
+                            positionMap.set(apt.id, { left, width });
+                          });
+                        });
+
+                        return filteredAppointments.map((apt) => {
+                          const startHour = new Date(apt.start_time).getHours();
+                          const startMinutes = new Date(apt.start_time).getMinutes();
+                          const endHour = new Date(apt.end_time).getHours();
+                          const endMinutes = new Date(apt.end_time).getMinutes();
+
+                          const top = ((startHour - 8) * 64) + (startMinutes / 60 * 64);
+                          const duration = ((endHour - startHour) * 60 + (endMinutes - startMinutes));
+                          const height = Math.max(48, duration / 60 * 64);
+
+                          const doctorColor = doctors.find(d => d.id === apt.doctor_id)?.color || '#007AFF';
+                          const position = positionMap.get(apt.id) || { left: '0%', width: '100%' };
+
+                          if (startHour < 8 || startHour > 20) return null;
+
+                          return (
+                            <div
+                              key={apt.id}
+                              className={cn(
+                                "absolute rounded-xl p-2 cursor-pointer transition-all hover:scale-[1.02] hover:z-10 shadow-sm",
+                                apt.type === 'personal' ? "bg-ios-gray-200/80" : ""
+                              )}
+                              style={{
+                                top: `${top}px`,
+                                height: `${height}px`,
+                                left: `calc(${position.left} + 4px)`,
+                                width: `calc(${position.width} - 8px)`,
+                                backgroundColor: apt.type !== 'personal' ? `${doctorColor}20` : undefined,
+                                borderLeft: apt.type !== 'personal' ? `3px solid ${doctorColor}` : '3px solid #8E8E93'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                // Pre-fill form with appointment data
+                                setEditingAppointmentId(apt.id);
+                                setAppointmentType(apt.type);
+                                if (apt.type === 'medical') {
+                                  setTitle(apt.title);
+                                  setDescription(apt.description || '');
+                                  setSelectedPatientId(apt.patient_id || '');
+                                  setSelectedDoctorId(apt.doctor_id || '');
+                                  setSelectedTreatmentId(apt.treatment_type || '');
+                                  setStatus(apt.status);
+                                } else {
+                                  setEventTitle(apt.title);
+                                  setEventDescription(apt.description || '');
+                                }
+                                setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
+                                setStartTime(format(new Date(apt.start_time), 'HH:mm'));
+                                setEndTime(format(new Date(apt.end_time), 'HH:mm'));
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              <div className="flex items-start justify-between h-full">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold text-ios-gray-900 truncate">{apt.title}</p>
+                                  {apt.patients && height > 50 && (
+                                    <p className="text-xs text-ios-gray-600 truncate mt-0.5">
+                                      {apt.patients.first_name} {apt.patients.last_name}
+                                    </p>
+                                  )}
+                                  {height > 70 && (
+                                    <p className="text-xs text-ios-gray-400 mt-1">
+                                      {format(new Date(apt.start_time), 'HH:mm')} - {format(new Date(apt.end_time), 'HH:mm')}
+                                    </p>
+                                  )}
+                                </div>
+                                <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
+                                  <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
+                                    {STATUS_OPTIONS.find(s => s.value === apt.status) && (
+                                      <div className="h-2 w-2 rounded-full bg-current" />
+                                    )}
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl">
+                                    {STATUS_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        <span className={cn("flex items-center gap-2", option.color)}>
+                                          <option.icon className="h-3 w-3" />
+                                          {option.label}
+                                        </span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+
+                      {/* Current Time Indicator */}
+                      {isSameDay(selectedDate, new Date()) && (
+                        <div
+                          className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
+                          style={{
+                            top: `${((new Date().getHours() - 8) * 64) + (new Date().getMinutes() / 60 * 64)}px`
+                          }}
+                        >
+                          <div className="h-3 w-3 rounded-full bg-ios-red -ml-1.5" />
+                          <div className="flex-1 h-0.5 bg-ios-red" />
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
+
+                  {/* Empty State for Timeline */}
+                  {filteredAppointments.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm pointer-events-none">
+                      <div className="text-center">
+                        <p className="text-ios-gray-500">Sin citas programadas</p>
+                        <p className="text-xs text-ios-gray-400 mt-1">Doble click en cualquier hora para agendar</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
-
       {/* Create Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         setIsDialogOpen(open);
@@ -1424,7 +1429,7 @@ const Agenda = () => {
           </Tabs>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </MainLayout >
   );
 };
 
