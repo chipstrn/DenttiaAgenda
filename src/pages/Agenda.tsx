@@ -111,7 +111,7 @@ const Agenda = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedLocation, setSelectedLocation] = useState<string>('9b8f816c-34ee-4967-a5a2-69af15e48f7d'); // Default: Tehuacán
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [appointmentType, setAppointmentType] = useState<'medical' | 'personal'>('medical');
   const [patientSearch, setPatientSearch] = useState('');
