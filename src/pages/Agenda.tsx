@@ -296,7 +296,7 @@ const Agenda = () => {
         type: appointmentType,
         location_id: selectedLocation !== 'all' ? selectedLocation : null,
         patient_data_status: 'complete',
-        doctor_id: appointmentType === 'medical' ? selectedDoctorId : null
+        doctor_id: selectedDoctorId || null
       };
 
       if (editingAppointmentId) {
@@ -790,6 +790,7 @@ const Agenda = () => {
                           } else {
                             setEventTitle(apt.title);
                             setEventDescription(apt.description || '');
+                            setSelectedDoctorId(apt.doctor_id || '');
                           }
                           setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
                           setStartTime(format(new Date(apt.start_time), 'HH:mm'));
@@ -797,12 +798,11 @@ const Agenda = () => {
                           setIsDialogOpen(true);
                         }}
                       >
-                        {apt.type !== 'personal' && (
-                          <div
-                            className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl"
-                            style={{ backgroundColor: doctorColor }}
-                          />
-                        )}
+                        {/* Left color stripe - now shows for personal events too */}
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl"
+                          style={{ backgroundColor: doctorColor }}
+                        />
 
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 pl-5">
                           <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
@@ -1001,15 +1001,16 @@ const Agenda = () => {
                               key={apt.id}
                               className={cn(
                                 "absolute rounded-xl p-2 cursor-pointer transition-all hover:scale-[1.02] hover:z-10 shadow-sm",
-                                apt.type === 'personal' ? "bg-ios-gray-200/80" : ""
+                                apt.type === 'personal' ? "border-dashed border-2" : ""
                               )}
                               style={{
                                 top: `${top}px`,
                                 height: `${height}px`,
                                 left: `calc(${position.left} + 4px)`,
                                 width: `calc(${position.width} - 8px)`,
-                                backgroundColor: apt.type !== 'personal' ? `${doctorColor}20` : undefined,
-                                borderLeft: apt.type !== 'personal' ? `3px solid ${doctorColor}` : '3px solid #8E8E93'
+                                backgroundColor: `${doctorColor}20`,
+                                borderLeft: `3px solid ${doctorColor}`,
+                                borderColor: apt.type === 'personal' ? doctorColor : undefined
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1029,6 +1030,7 @@ const Agenda = () => {
                                 } else {
                                   setEventTitle(apt.title);
                                   setEventDescription(apt.description || '');
+                                  setSelectedDoctorId(apt.doctor_id || '');
                                 }
                                 setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
                                 setStartTime(format(new Date(apt.start_time), 'HH:mm'));
@@ -1335,6 +1337,29 @@ const Agenda = () => {
                       required
                       className="ios-input"
                     />
+                  </div>
+
+                  {/* Doctor selector for personal events */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-ios-gray-600">Doctor a bloquear *</Label>
+                    <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                      <SelectTrigger className="ios-input">
+                        <SelectValue placeholder="Selecciona doctor..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {doctors.map((doc) => (
+                          <SelectItem key={doc.id} value={doc.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-3 w-3 rounded-full"
+                                style={{ backgroundColor: doc.color }}
+                              />
+                              {doc.full_name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
