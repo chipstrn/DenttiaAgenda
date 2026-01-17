@@ -7,4 +7,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Supabase URL or Key is missing!");
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Prevent crash if env vars are missing, but functionality will be broken
+// App.tsx should handle this state and show a configuration error
+export const supabase = (SUPABASE_URL && SUPABASE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null as any;
