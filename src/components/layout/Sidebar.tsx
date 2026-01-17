@@ -2,20 +2,24 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Calendar, 
-  CreditCard, 
-  Activity, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  CreditCard,
+  Activity,
+  Settings,
   LogOut,
   ChevronRight,
   Stethoscope,
   FileText,
   UserCog,
   Calculator,
-  Shield
+  Shield,
+  Box,
+  TrendingUp,
+  BarChart3,
+  DollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,15 +53,23 @@ const Sidebar = () => {
 
   // Menú de recepción
   const receptionMenuItems = useMemo(() => [
+    { icon: DollarSign, label: 'Caja y Cobros', path: '/reception-finance', color: 'bg-ios-green' },
     { icon: Calculator, label: 'Corte de Caja', path: '/cash-register', color: 'bg-ios-teal' },
   ], []);
 
   // Menú de administración - solo admin
   const adminMenuItems = useMemo(() => [
-    { icon: CreditCard, label: 'Finanzas', path: '/finance', color: 'bg-ios-green' },
+    { icon: TrendingUp, label: 'Finanzas', path: '/finance', color: 'bg-ios-green' },
     { icon: Shield, label: 'Auditoría', path: '/finance-audit', color: 'bg-ios-red' },
-    { icon: UserCog, label: 'Personal', path: '/staff', color: 'bg-ios-purple' },
+    { icon: DollarSign, label: 'Comisiones', path: '/finance/commissions', color: 'bg-ios-teal' },
+    { icon: BarChart3, label: 'Reportes', path: '/reports', color: 'bg-ios-purple' },
+    { icon: UserCog, label: 'Personal', path: '/staff', color: 'bg-ios-indigo' },
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
+  ], []);
+
+  // Menú de inventario - visible para todos (o restringir según lógica de negocio, plan dice todos con acceso a recepción/admin)
+  const inventoryMenuItems = useMemo(() => [
+    { icon: Box, label: 'Inventario', path: '/inventory', color: 'bg-ios-orange' },
   ], []);
 
   const handleLogout = useCallback(async () => {
@@ -74,17 +86,17 @@ const Sidebar = () => {
   const MenuItem = useCallback(({ item }: { item: { icon: React.ElementType; label: string; path: string; color: string } }) => {
     const isActive = location.pathname === item.path;
     const Icon = item.icon;
-    
+
     return (
-      <Link 
-        to={item.path} 
+      <Link
+        to={item.path}
         className="block"
       >
         <div
           className={cn(
             "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-ios group touch-feedback",
-            isActive 
-              ? "bg-white shadow-ios-sm" 
+            isActive
+              ? "bg-white shadow-ios-sm"
               : "hover:bg-white/60"
           )}
         >
@@ -181,7 +193,19 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* Admin - Solo para admin */}
+        {/* Inventory Section */}
+        <div className="mb-6">
+          <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+            Inventario
+          </p>
+          <div className="space-y-1">
+            {inventoryMenuItems.map((item) => (
+              <MenuItem key={item.path} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Admin Section */}
         {isAdmin && (
           <div className="mb-6">
             <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
@@ -207,7 +231,7 @@ const Sidebar = () => {
 
       {/* Logout */}
       <div className="p-3 border-t border-ios-gray-200/50">
-        <button 
+        <button
           onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 ease-ios hover:bg-ios-red/10 touch-feedback group"
         >

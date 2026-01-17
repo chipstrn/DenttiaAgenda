@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Sidebar from './Sidebar';
-import { Bell, Search, Plus } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Bell, Plus } from 'lucide-react';
+import GlobalSearch from './GlobalSearch';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -59,26 +59,18 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   return (
     <div className="min-h-screen bg-ios-gray-100">
       <Sidebar />
-      
+
       <div className="pl-72 flex flex-col min-h-screen">
         {/* Glass Header */}
         <header className={cn(
           "h-16 px-8 flex items-center justify-between sticky top-0 z-20 transition-all duration-300 ease-ios",
-          scrolled 
-            ? "glass border-b border-white/20 shadow-glass" 
+          scrolled
+            ? "glass border-b border-white/20 shadow-glass"
             : "bg-transparent"
         )}>
           {/* Search */}
-          <div className="w-80">
-            <div className="relative group">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ios-gray-400 transition-colors group-focus-within:text-ios-blue" />
-              <Input 
-                placeholder="Buscar..." 
-                className="pl-10 h-10 bg-white/80 border-0 rounded-xl text-sm placeholder:text-ios-gray-400 focus-visible:ring-2 focus-visible:ring-ios-blue/30 focus-visible:bg-white transition-all duration-200 shadow-ios-sm"
-              />
-            </div>
-          </div>
-          
+          <GlobalSearch />
+
           {/* Right Actions */}
           <div className="flex items-center gap-3">
             {/* Quick Add Button */}
@@ -94,7 +86,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
               <Bell className="h-5 w-5 text-ios-gray-600" />
               <span className="absolute top-2 right-2 h-2 w-2 bg-ios-red rounded-full ring-2 ring-white"></span>
             </button>
-            
+
             {/* Profile */}
             <div className="flex items-center gap-3 pl-3 ml-1 border-l border-ios-gray-200/50">
               <div className="text-right hidden md:block">

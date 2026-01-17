@@ -32,6 +32,8 @@ interface Treatment {
   duration_minutes: number;
   is_active: boolean;
   user_id: string;
+  commission_percentage?: number;
+  commission_type?: 'percent' | 'fixed';
 }
 
 const categories = [
@@ -67,13 +69,15 @@ const Treatments = () => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
-  
+
   // Individual form states
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formCategory, setFormCategory] = useState('');
   const [formBasePrice, setFormBasePrice] = useState('');
   const [formDuration, setFormDuration] = useState('30');
+  const [formCommissionPercentage, setFormCommissionPercentage] = useState('');
+  const [formCommissionType, setFormCommissionType] = useState<'percent' | 'fixed'>('percent');
 
   const fetchTreatments = useCallback(async () => {
     try {
@@ -103,6 +107,8 @@ const Treatments = () => {
     setFormCategory('');
     setFormBasePrice('');
     setFormDuration('30');
+    setFormCommissionPercentage('');
+    setFormCommissionType('percent');
     setEditingTreatment(null);
   }, []);
 
@@ -118,6 +124,8 @@ const Treatments = () => {
         category: formCategory,
         base_price: parseFloat(formBasePrice) || 0,
         duration_minutes: parseInt(formDuration) || 30,
+        commission_percentage: parseFloat(formCommissionPercentage) || 0,
+        commission_type: formCommissionType,
         is_active: true
       };
 
@@ -156,12 +164,14 @@ const Treatments = () => {
     setFormCategory(treatment.category || '');
     setFormBasePrice(treatment.base_price?.toString() || '');
     setFormDuration(treatment.duration_minutes?.toString() || '30');
+    setFormCommissionPercentage(treatment.commission_percentage?.toString() || '');
+    setFormCommissionType(treatment.commission_type || 'percent');
     setIsDialogOpen(true);
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('¿Eliminar este tratamiento?')) return;
-    
+
     try {
       const { error } = await supabase
         .from('treatments')
@@ -169,7 +179,7 @@ const Treatments = () => {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       setTreatments(prev => prev.filter(t => t.id !== id));
       toast.success('Tratamiento eliminado');
     } catch (error) {
@@ -192,7 +202,7 @@ const Treatments = () => {
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Tratamientos</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">{treatments.length} servicios en catálogo</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsDialogOpen(true)}
           className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-purple text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-purple/90 transition-all duration-200 touch-feedback"
         >
@@ -234,8 +244,8 @@ const Treatments = () => {
       ) : filteredTreatments.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredTreatments.map((treatment, index) => (
-            <div 
-              key={treatment.id} 
+            <div
+              key={treatment.id}
               className="ios-card p-5 animate-slide-up"
               style={{ animationDelay: `${100 + index * 50}ms` }}
             >
@@ -247,13 +257,13 @@ const Treatments = () => {
                   <Activity className="h-5 w-5 text-white" />
                 </div>
                 <div className="flex gap-1">
-                  <button 
+                  <button
                     onClick={() => handleEdit(treatment)}
                     className="h-9 w-9 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
                   >
                     <Edit className="h-4 w-4 text-ios-gray-600" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDelete(treatment.id)}
                     className="h-9 w-9 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
                   >
@@ -261,7 +271,7 @@ const Treatments = () => {
                   </button>
                 </div>
               </div>
-              
+
               <h3 className="font-bold text-ios-gray-900 mb-1">{treatment.name}</h3>
               {treatment.category && (
                 <span className={cn(
@@ -274,7 +284,7 @@ const Treatments = () => {
               {treatment.description && (
                 <p className="text-sm text-ios-gray-500 mb-4 line-clamp-2">{treatment.description}</p>
               )}
-              
+
               <div className="flex items-center justify-between pt-3 border-t border-ios-gray-100">
                 <div className="flex items-center gap-1.5 text-ios-gray-500">
                   <Clock className="h-4 w-4" />
@@ -295,7 +305,7 @@ const Treatments = () => {
           </div>
           <p className="text-ios-gray-900 font-semibold">Sin tratamientos</p>
           <p className="text-ios-gray-500 text-sm mt-1">Agrega servicios a tu catálogo</p>
-          <button 
+          <button
             onClick={() => setIsDialogOpen(true)}
             className="mt-4 text-ios-purple font-semibold text-sm hover:opacity-70 transition-opacity"
           >
@@ -318,7 +328,7 @@ const Treatments = () => {
               {editingTreatment ? 'Modifica los datos' : 'Agrega un nuevo servicio'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit}>
             <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="space-y-2">
@@ -366,6 +376,39 @@ const Treatments = () => {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">Tipo Comisión</Label>
+                  <Select value={formCommissionType} onValueChange={(v: any) => setFormCommissionType(v)}>
+                    <SelectTrigger className="ios-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="percent">Porcentaje (%)</SelectItem>
+                      <SelectItem value="fixed">Fijo ($)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-ios-gray-600">
+                    {formCommissionType === 'percent' ? 'Comisión (%)' : 'Comisión ($)'}
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-gray-400 font-bold">
+                      {formCommissionType === 'percent' ? '%' : '$'}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step={formCommissionType === 'percent' ? "0.1" : "1"}
+                      value={formCommissionPercentage}
+                      onChange={(e) => setFormCommissionPercentage(e.target.value)}
+                      placeholder="0"
+                      className="ios-input pl-10"
+                    />
+                  </div>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Descripción</Label>
                 <textarea
@@ -376,16 +419,16 @@ const Treatments = () => {
                 />
               </div>
             </div>
-            
+
             <div className="p-6 pt-4 flex gap-3">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsDialogOpen(false)}
                 className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="submit"
                 disabled={saving}
                 className="flex-1 h-12 rounded-xl bg-ios-purple text-white font-semibold hover:bg-ios-purple/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"

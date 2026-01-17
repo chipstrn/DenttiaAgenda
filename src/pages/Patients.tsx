@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope, Loader2, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -69,7 +69,7 @@ const Patients = () => {
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar este paciente? Esta acción no se puede deshacer.')) return;
-    
+
     setDeleting(id);
     try {
       const { error } = await supabase
@@ -78,7 +78,7 @@ const Patients = () => {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       setPatients(prev => prev.filter(p => p.id !== id));
       toast.success('Paciente eliminado');
     } catch (error) {
@@ -100,7 +100,7 @@ const Patients = () => {
   const filteredPatients = useMemo(() => {
     if (!searchTerm) return patients;
     const term = searchTerm.toLowerCase();
-    return patients.filter(p => 
+    return patients.filter(p =>
       `${p.first_name} ${p.last_name}`.toLowerCase().includes(term) ||
       p.email?.toLowerCase().includes(term) ||
       p.phone?.includes(searchTerm)
@@ -119,7 +119,7 @@ const Patients = () => {
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Pacientes</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">{patients.length} pacientes registrados</p>
         </div>
-        <button 
+        <button
           onClick={() => navigate('/patient/new')}
           className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
         >
@@ -169,9 +169,9 @@ const Patients = () => {
             {filteredPatients.map((patient, index) => {
               const status = getRecordStatus(patient.id);
               const isDeleting = deleting === patient.id;
-              
+
               return (
-                <div 
+                <div
                   key={patient.id}
                   className={cn(
                     "flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in",
@@ -184,7 +184,7 @@ const Patients = () => {
                   <div className={cn(
                     "h-3 w-3 rounded-full flex-shrink-0",
                     status === 'complete' ? 'bg-ios-green' :
-                    status === 'reception' ? 'bg-ios-orange' : 'bg-ios-gray-300'
+                      status === 'reception' ? 'bg-ios-orange' : 'bg-ios-gray-300'
                   )} />
 
                   {/* Avatar */}
@@ -193,7 +193,7 @@ const Patients = () => {
                       {patient.first_name?.[0]?.toUpperCase()}{patient.last_name?.[0]?.toUpperCase()}
                     </span>
                   </div>
-                  
+
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-ios-gray-900">
@@ -219,7 +219,7 @@ const Patients = () => {
                   <div className={cn(
                     "px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5",
                     status === 'complete' ? 'bg-ios-green/15 text-ios-green' :
-                    status === 'reception' ? 'bg-ios-orange/15 text-ios-orange' : 'bg-ios-gray-100 text-ios-gray-500'
+                      status === 'reception' ? 'bg-ios-orange/15 text-ios-orange' : 'bg-ios-gray-100 text-ios-gray-500'
                   )}>
                     {status === 'complete' ? (
                       <>
@@ -241,21 +241,28 @@ const Patients = () => {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button 
+                    <button
                       onClick={() => navigate(`/patient/${patient.id}/exam`)}
                       className="h-10 w-10 rounded-xl bg-ios-purple/10 flex items-center justify-center hover:bg-ios-purple/20 transition-colors touch-feedback"
                       title="Odontograma"
                     >
                       <Stethoscope className="h-4 w-4 text-ios-purple" />
                     </button>
-                    <button 
+                    <button
                       onClick={() => navigate(`/patient/${patient.id}/anamnesis`)}
                       className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green/20 transition-colors touch-feedback"
                       title="Anamnesis (Doctor)"
                     >
                       <FileText className="h-4 w-4 text-ios-green" />
                     </button>
-                    <button 
+                    <button
+                      onClick={() => navigate(`/patient/${patient.id}/evolution`)}
+                      className="h-10 w-10 rounded-xl bg-ios-blue/10 flex items-center justify-center hover:bg-ios-blue/20 transition-colors touch-feedback"
+                      title="Notas de Evolución"
+                    >
+                      <ClipboardList className="h-4 w-4 text-ios-blue" />
+                    </button>
+                    <button
                       onClick={() => navigate(`/patient/${patient.id}/intake`)}
                       className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
                       title="Editar (Recepción)"
@@ -263,7 +270,7 @@ const Patients = () => {
                       <Edit className="h-4 w-4 text-ios-gray-600" />
                     </button>
                     {isAdmin && (
-                      <button 
+                      <button
                         onClick={() => handleDelete(patient.id)}
                         disabled={isDeleting}
                         className="h-10 w-10 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback disabled:opacity-50"
@@ -293,7 +300,7 @@ const Patients = () => {
               {searchTerm ? 'Intenta con otro término de búsqueda' : 'Comienza agregando tu primer paciente'}
             </p>
             {!searchTerm && (
-              <button 
+              <button
                 onClick={() => navigate('/patient/new')}
                 className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
               >

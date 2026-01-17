@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import {
@@ -12,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Stethoscope, Edit, Trash2, Phone, Mail, Award, Loader2 } from 'lucide-react';
+import { Plus, Stethoscope, Edit, Trash2, Phone, Mail, Award, Loader2, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Doctor {
@@ -40,13 +41,14 @@ const specialties = [
 ];
 
 const Doctors = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
-  
+
   // Form states
   const [fullName, setFullName] = useState('');
   const [specialty, setSpecialty] = useState('');
@@ -55,16 +57,32 @@ const Doctors = () => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [commissionPercentage, setCommissionPercentage] = useState('');
+  const [doctorColor, setDoctorColor] = useState('#007AFF');
 
   const fetchDoctors = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('doctors')
-        .select('*')
-        .order('full_name', { ascending: true });
+      const [doctorsResult, commissionsResult] = await Promise.all([
+        supabase
+          .from('doctors')
+          .select('*')
+          .order('full_name', { ascending: true }),
+        supabase
+          .from('commission_settings')
+          .select('doctor_id, percentage')
+      ]);
 
-      if (error) throw error;
-      setDoctors(data || []);
+      if (doctorsResult.error) throw doctorsResult.error;
+
+      const commissionsMap = new Map();
+      commissionsResult.data?.forEach(c => commissionsMap.set(c.doctor_id, c.percentage));
+
+      const doctorsWithCommissions = (doctorsResult.data || []).map(d => ({
+        ...d,
+        percentage: commissionsMap.get(d.id) || 0
+      }));
+
+      setDoctors(doctorsWithCommissions);
     } catch (error) {
       console.error('Error fetching doctors:', error);
       toast.error('Error al cargar doctores');
@@ -85,6 +103,8 @@ const Doctors = () => {
     setPhone('');
     setEmail('');
     setAddress('');
+    setCommissionPercentage('');
+    setDoctorColor('#007AFF');
     setEditingDoctor(null);
   }, []);
 
@@ -107,24 +127,43 @@ const Doctors = () => {
         phone: phone.trim() || null,
         email: email.trim() || null,
         address: address.trim() || null,
+        color: doctorColor,
         is_active: true
       };
 
+      let doctorId;
+
       if (editingDoctor) {
+        doctorId = editingDoctor.id;
         const { error } = await supabase
           .from('doctors')
           .update(doctorData)
-          .eq('id', editingDoctor.id);
+          .eq('id', doctorId);
 
         if (error) throw error;
         toast.success('Doctor actualizado');
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('doctors')
-          .insert({ ...doctorData, user_id: user.id });
+          .insert({ ...doctorData, user_id: user.id })
+          .select()
+          .single();
 
         if (error) throw error;
+        doctorId = data.id;
         toast.success('Doctor agregado');
+      }
+
+      // Save commission
+      if (commissionPercentage) {
+        const { error: commError } = await supabase
+          .from('commission_settings')
+          .upsert({
+            doctor_id: doctorId,
+            percentage: parseFloat(commissionPercentage)
+          }, { onConflict: 'doctor_id' });
+
+        if (commError) throw commError;
       }
 
       setIsDialogOpen(false);
@@ -138,7 +177,7 @@ const Doctors = () => {
     }
   };
 
-  const handleEdit = useCallback((doctor: Doctor) => {
+  const handleEdit = useCallback((doctor: any) => {
     setEditingDoctor(doctor);
     setFullName(doctor.full_name || '');
     setSpecialty(doctor.specialty || '');
@@ -147,12 +186,14 @@ const Doctors = () => {
     setPhone(doctor.phone || '');
     setEmail(doctor.email || '');
     setAddress(doctor.address || '');
+    setCommissionPercentage(doctor.percentage?.toString() || '');
+    setDoctorColor(doctor.color || '#007AFF');
     setIsDialogOpen(true);
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('¿Eliminar este doctor?')) return;
-    
+
     try {
       const { error } = await supabase
         .from('doctors')
@@ -160,7 +201,7 @@ const Doctors = () => {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       setDoctors(prev => prev.filter(d => d.id !== id));
       toast.success('Doctor eliminado');
     } catch (error) {
@@ -186,13 +227,22 @@ const Doctors = () => {
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Doctores</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">{doctors.length} profesionales registrados</p>
         </div>
-        <button 
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-indigo text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-indigo/90 transition-all duration-200 touch-feedback"
-        >
-          <Plus className="h-5 w-5" />
-          Nuevo Doctor
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/finance/commissions')}
+            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-white text-ios-gray-900 font-semibold text-sm shadow-ios-sm hover:bg-ios-gray-50 transition-all duration-200 touch-feedback"
+          >
+            <DollarSign className="h-5 w-5 text-ios-green" />
+            Reporte Comisiones
+          </button>
+          <button
+            onClick={() => setIsDialogOpen(true)}
+            className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-indigo text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-indigo/90 transition-all duration-200 touch-feedback"
+          >
+            <Plus className="h-5 w-5" />
+            Nuevo Doctor
+          </button>
+        </div>
       </div>
 
       {/* Doctors Grid */}
@@ -203,25 +253,28 @@ const Doctors = () => {
       ) : doctors.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {doctors.map((doctor, index) => (
-            <div 
-              key={doctor.id} 
+            <div
+              key={doctor.id}
               className="ios-card p-5 animate-slide-up"
               style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-ios-indigo to-ios-purple flex items-center justify-center">
+                <div
+                  className="h-14 w-14 rounded-2xl flex items-center justify-center"
+                  style={{ backgroundColor: doctor.color || '#007AFF' }}
+                >
                   <span className="text-white font-bold text-lg">
                     {getInitials(doctor.full_name)}
                   </span>
                 </div>
                 <div className="flex gap-1">
-                  <button 
+                  <button
                     onClick={() => handleEdit(doctor)}
                     className="h-9 w-9 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
                   >
                     <Edit className="h-4 w-4 text-ios-gray-600" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDelete(doctor.id)}
                     className="h-9 w-9 rounded-xl bg-ios-red/10 flex items-center justify-center hover:bg-ios-red/20 transition-colors touch-feedback"
                   >
@@ -229,16 +282,24 @@ const Doctors = () => {
                   </button>
                 </div>
               </div>
-              
+
               <h3 className="font-bold text-ios-gray-900 text-lg">
                 {doctor.full_name}
               </h3>
-              {doctor.specialty && (
-                <span className="inline-block px-2.5 py-1 rounded-lg bg-ios-indigo/10 text-ios-indigo text-xs font-semibold mt-2">
-                  {doctor.specialty}
-                </span>
-              )}
-              
+              <div className="flex flex-wrap gap-2 mt-2">
+                {doctor.specialty && (
+                  <span className="inline-block px-2.5 py-1 rounded-lg bg-ios-indigo/10 text-ios-indigo text-xs font-semibold">
+                    {doctor.specialty}
+                  </span>
+                )}
+                {doctor.percentage > 0 && (
+                  <span className="inline-block px-2.5 py-1 rounded-lg bg-ios-green/10 text-ios-green text-xs font-semibold flex items-center gap-1">
+                    <DollarSign className="h-3 w-3" />
+                    {doctor.percentage}% Com.
+                  </span>
+                )}
+              </div>
+
               <div className="mt-4 space-y-2">
                 {doctor.professional_license && (
                   <div className="flex items-center gap-2 text-sm text-ios-gray-500">
@@ -269,7 +330,7 @@ const Doctors = () => {
           </div>
           <p className="text-ios-gray-900 font-semibold">Sin doctores</p>
           <p className="text-ios-gray-500 text-sm mt-1">Agrega profesionales a tu equipo</p>
-          <button 
+          <button
             onClick={() => setIsDialogOpen(true)}
             className="mt-4 text-ios-indigo font-semibold text-sm hover:opacity-70 transition-opacity"
           >
@@ -292,9 +353,10 @@ const Doctors = () => {
               {editingDoctor ? 'Modifica los datos del doctor' : 'Agrega un profesional al equipo'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit}>
             <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Other inputs remain same, add Commission */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Nombre Completo *</Label>
                 <input
@@ -318,15 +380,22 @@ const Doctors = () => {
                   ))}
                 </select>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-ios-gray-600">Cédula Profesional</Label>
-                  <input
-                    value={professionalLicense}
-                    onChange={(e) => setProfessionalLicense(e.target.value)}
-                    placeholder="12345678"
-                    className="ios-input"
-                  />
+                  <Label className="text-sm font-medium text-ios-gray-600">Comisión (%)</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ios-gray-400" />
+                    <input
+                      type="number"
+                      value={commissionPercentage}
+                      onChange={(e) => setCommissionPercentage(e.target.value)}
+                      placeholder="Ej: 30"
+                      className="ios-input pl-10"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-ios-gray-600">Teléfono</Label>
@@ -339,6 +408,17 @@ const Doctors = () => {
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Cédula Profesional</Label>
+                <input
+                  value={professionalLicense}
+                  onChange={(e) => setProfessionalLicense(e.target.value)}
+                  placeholder="12345678"
+                  className="ios-input"
+                />
+              </div>
+              {/* University, Email, Address inputs... */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-ios-gray-600">Universidad</Label>
                 <input
@@ -367,17 +447,42 @@ const Doctors = () => {
                   className="ios-input"
                 />
               </div>
+
+              {/* Color Picker for Calendar */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-ios-gray-600">Color en Agenda</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={doctorColor}
+                    onChange={(e) => setDoctorColor(e.target.value)}
+                    className="h-10 w-16 rounded-lg border-0 cursor-pointer"
+                  />
+                  <div className="flex gap-2">
+                    {['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#5856D6', '#00C7BE', '#FF375F'].map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setDoctorColor(color)}
+                        className={`h-8 w-8 rounded-full transition-transform ${doctorColor === color ? 'ring-2 ring-offset-2 ring-ios-blue scale-110' : 'hover:scale-105'}`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-ios-gray-500">Este color identificará al doctor en el calendario</p>
+              </div>
             </div>
-            
+
             <div className="p-6 pt-4 flex gap-3">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsDialogOpen(false)}
                 className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="submit"
                 disabled={saving}
                 className="flex-1 h-12 rounded-xl bg-ios-indigo text-white font-semibold hover:bg-ios-indigo/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"

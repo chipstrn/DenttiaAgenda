@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
+import {
   ClipboardCheck, AlertTriangle, CheckCircle, XCircle,
   Loader2, Eye, Calculator, FileText, TrendingUp, TrendingDown,
   Edit3, Save, Calendar, BarChart3, Trash2, Ban
@@ -76,12 +76,12 @@ const FinanceAudit = () => {
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
   const [selectedWeek, setSelectedWeek] = useState(0);
-  
+
   // Delete confirmation states
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteType, setDeleteType] = useState<'void' | 'hard'>('void');
   const [deleting, setDeleting] = useState(false);
-  
+
   // Modo de auditoría externa (para migración)
   const [useManualSource, setUseManualSource] = useState(true);
   const [manualExpected, setManualExpected] = useState('');
@@ -135,13 +135,13 @@ const FinanceAudit = () => {
   const openDetail = useCallback(async (register: CashRegister) => {
     setSelectedRegister(register);
     setAdminNotes(register.admin_notes || '');
-    
+
     if (register.system_total > 0) {
       setManualExpected(register.system_total.toString());
     } else {
       setManualExpected('');
     }
-    
+
     setUseManualSource(true);
     await fetchSystemExpected(register.register_date);
     setIsDetailOpen(true);
@@ -149,12 +149,12 @@ const FinanceAudit = () => {
 
   const calculateDifference = useCallback(() => {
     if (!selectedRegister) return { difference: 0, expected: 0 };
-    
+
     const declared = selectedRegister.closing_balance;
-    const expected = useManualSource 
+    const expected = useManualSource
       ? (parseFloat(manualExpected) || 0)
       : systemExpected;
-    
+
     return {
       difference: declared - expected,
       expected
@@ -163,9 +163,9 @@ const FinanceAudit = () => {
 
   const handleApprove = async () => {
     if (!selectedRegister || !user?.id) return;
-    
+
     const { difference, expected } = calculateDifference();
-    
+
     if (useManualSource && !manualExpected) {
       toast.error('Ingresa el monto esperado del sistema externo');
       return;
@@ -234,7 +234,7 @@ const FinanceAudit = () => {
   // Handle void (soft delete) - maintains historical traceability
   const handleVoid = async () => {
     if (!selectedRegister || !user?.id || !isAdmin) return;
-    
+
     setDeleting(true);
     try {
       const { error } = await supabase
@@ -264,7 +264,7 @@ const FinanceAudit = () => {
   // Handle hard delete - permanent removal
   const handleHardDelete = async () => {
     if (!selectedRegister || !user?.id || !isAdmin) return;
-    
+
     setDeleting(true);
     try {
       // First delete related records
@@ -272,7 +272,7 @@ const FinanceAudit = () => {
         .from('daily_expenses')
         .delete()
         .eq('cash_register_id', selectedRegister.id);
-      
+
       await supabase
         .from('cash_withdrawals')
         .delete()
@@ -381,27 +381,14 @@ const FinanceAudit = () => {
         <p className="text-ios-gray-500 mt-1 font-medium">Revisión de cortes de caja - Modo Migración</p>
       </div>
 
-      {/* Info Banner */}
-      <div className="mb-6 p-4 rounded-2xl bg-ios-blue/10 border border-ios-blue/20 animate-fade-in">
-        <div className="flex items-start gap-3">
-          <Edit3 className="h-5 w-5 text-ios-blue mt-0.5" />
-          <div>
-            <p className="font-semibold text-ios-blue">Modo Auditoría Externa Activo</p>
-            <p className="text-sm text-ios-gray-600 mt-1">
-              Ingresa manualmente el "Dinero Esperado" desde tu sistema anterior para compararlo con lo declarado por recepción.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* View Toggle */}
       <div className="flex gap-2 mb-6 animate-fade-in">
         <button
           onClick={() => setViewMode('daily')}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all",
-            viewMode === 'daily' 
-              ? 'bg-ios-blue text-white' 
+            viewMode === 'daily'
+              ? 'bg-ios-blue text-white'
               : 'bg-ios-gray-100 text-ios-gray-600 hover:bg-ios-gray-200'
           )}
         >
@@ -412,8 +399,8 @@ const FinanceAudit = () => {
           onClick={() => setViewMode('weekly')}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all",
-            viewMode === 'weekly' 
-              ? 'bg-ios-blue text-white' 
+            viewMode === 'weekly'
+              ? 'bg-ios-blue text-white'
               : 'bg-ios-gray-100 text-ios-gray-600 hover:bg-ios-gray-200'
           )}
         >
@@ -467,24 +454,24 @@ const FinanceAudit = () => {
               </div>
               <div className={cn(
                 "p-4 rounded-xl",
-                weeklyData.totalDifference < 0 ? 'bg-ios-red/10' : 
-                weeklyData.totalDifference > 0 ? 'bg-ios-blue/10' : 'bg-ios-gray-50'
+                weeklyData.totalDifference < 0 ? 'bg-ios-red/10' :
+                  weeklyData.totalDifference > 0 ? 'bg-ios-blue/10' : 'bg-ios-gray-50'
               )}>
                 <p className={cn(
                   "text-sm",
-                  weeklyData.totalDifference < 0 ? 'text-ios-red' : 
-                  weeklyData.totalDifference > 0 ? 'text-ios-blue' : 'text-ios-gray-500'
+                  weeklyData.totalDifference < 0 ? 'text-ios-red' :
+                    weeklyData.totalDifference > 0 ? 'text-ios-blue' : 'text-ios-gray-500'
                 )}>
                   Diferencia Total
                 </p>
                 <p className={cn(
                   "text-2xl font-bold",
-                  weeklyData.totalDifference < 0 ? 'text-ios-red' : 
-                  weeklyData.totalDifference > 0 ? 'text-ios-blue' : 'text-ios-gray-900'
+                  weeklyData.totalDifference < 0 ? 'text-ios-red' :
+                    weeklyData.totalDifference > 0 ? 'text-ios-blue' : 'text-ios-gray-900'
                 )}>
                   {weeklyData.totalDifference === 0 ? '$0.00' :
-                   weeklyData.totalDifference < 0 ? `-$${Math.abs(weeklyData.totalDifference).toFixed(2)}` : 
-                   `+$${weeklyData.totalDifference.toFixed(2)}`}
+                    weeklyData.totalDifference < 0 ? `-$${Math.abs(weeklyData.totalDifference).toFixed(2)}` :
+                      `+$${weeklyData.totalDifference.toFixed(2)}`}
                 </p>
               </div>
             </div>
@@ -510,11 +497,11 @@ const FinanceAudit = () => {
             <div className="p-5 border-b border-ios-gray-100">
               <h2 className="text-lg font-bold text-ios-gray-900">Cortes de la Semana</h2>
             </div>
-            
+
             {weeklyData.registers.length > 0 ? (
               <div className="divide-y divide-ios-gray-100">
                 {weeklyData.registers.map((register) => (
-                  <div 
+                  <div
                     key={register.id}
                     className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all cursor-pointer"
                     onClick={() => openDetail(register)}
@@ -522,17 +509,17 @@ const FinanceAudit = () => {
                     <div className={cn(
                       "h-12 w-12 rounded-2xl flex items-center justify-center",
                       register.status === 'approved' ? 'bg-ios-green/15' :
-                      register.status === 'rejected' ? 'bg-ios-red/15' : 
-                      register.status === 'voided' ? 'bg-ios-gray-200' : 'bg-ios-orange/15'
+                        register.status === 'rejected' ? 'bg-ios-red/15' :
+                          register.status === 'voided' ? 'bg-ios-gray-200' : 'bg-ios-orange/15'
                     )}>
                       <ClipboardCheck className={cn(
                         "h-6 w-6",
                         register.status === 'approved' ? 'text-ios-green' :
-                        register.status === 'rejected' ? 'text-ios-red' : 
-                        register.status === 'voided' ? 'text-ios-gray-500' : 'text-ios-orange'
+                          register.status === 'rejected' ? 'text-ios-red' :
+                            register.status === 'voided' ? 'text-ios-gray-500' : 'text-ios-orange'
                       )} />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-ios-gray-900">
@@ -584,7 +571,7 @@ const FinanceAudit = () => {
               <p className="text-2xl font-bold text-ios-gray-900">{pendingCount}</p>
               <p className="text-sm text-ios-gray-500 font-medium mt-1">Pendientes</p>
             </div>
-            
+
             <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
               <div className="flex items-start justify-between mb-4">
                 <div className="h-11 w-11 rounded-2xl bg-ios-green flex items-center justify-center">
@@ -594,7 +581,7 @@ const FinanceAudit = () => {
               <p className="text-2xl font-bold text-ios-gray-900">{approvedCount}</p>
               <p className="text-sm text-ios-gray-500 font-medium mt-1">Aprobados</p>
             </div>
-            
+
             <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '100ms' }}>
               <div className="flex items-start justify-between mb-4">
                 <div className="h-11 w-11 rounded-2xl bg-ios-red flex items-center justify-center">
@@ -604,7 +591,7 @@ const FinanceAudit = () => {
               <p className="text-2xl font-bold text-ios-gray-900">{withShortage}</p>
               <p className="text-sm text-ios-gray-500 font-medium mt-1">Con Faltante</p>
             </div>
-            
+
             <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '150ms' }}>
               <div className="flex items-start justify-between mb-4">
                 <div className="h-11 w-11 rounded-2xl bg-ios-blue flex items-center justify-center">
@@ -622,7 +609,7 @@ const FinanceAudit = () => {
               <h2 className="text-lg font-bold text-ios-gray-900">Cortes de Caja</h2>
               <p className="text-sm text-ios-gray-500 mt-1">Haz clic en un corte para revisarlo</p>
             </div>
-            
+
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
@@ -630,7 +617,7 @@ const FinanceAudit = () => {
             ) : registers.length > 0 ? (
               <div className="divide-y divide-ios-gray-100">
                 {registers.map((register, index) => (
-                  <div 
+                  <div
                     key={register.id}
                     className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios cursor-pointer animate-fade-in"
                     style={{ animationDelay: `${250 + index * 30}ms` }}
@@ -639,17 +626,17 @@ const FinanceAudit = () => {
                     <div className={cn(
                       "h-12 w-12 rounded-2xl flex items-center justify-center",
                       register.status === 'approved' ? 'bg-ios-green/15' :
-                      register.status === 'rejected' ? 'bg-ios-red/15' : 
-                      register.status === 'voided' ? 'bg-ios-gray-200' : 'bg-ios-orange/15'
+                        register.status === 'rejected' ? 'bg-ios-red/15' :
+                          register.status === 'voided' ? 'bg-ios-gray-200' : 'bg-ios-orange/15'
                     )}>
                       <ClipboardCheck className={cn(
                         "h-6 w-6",
                         register.status === 'approved' ? 'text-ios-green' :
-                        register.status === 'rejected' ? 'text-ios-red' : 
-                        register.status === 'voided' ? 'text-ios-gray-500' : 'text-ios-orange'
+                          register.status === 'rejected' ? 'text-ios-red' :
+                            register.status === 'voided' ? 'text-ios-gray-500' : 'text-ios-orange'
                       )} />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-ios-gray-900">
@@ -707,7 +694,7 @@ const FinanceAudit = () => {
                   {selectedRegister && format(parseISO(selectedRegister.register_date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
                 </DialogDescription>
               </div>
-              
+
               {/* Admin Delete Button */}
               {isAdmin && selectedRegister && selectedRegister.status !== 'voided' && (
                 <button
@@ -720,7 +707,7 @@ const FinanceAudit = () => {
               )}
             </div>
           </DialogHeader>
-          
+
           {selectedRegister && (
             <div className="px-6 pb-6 space-y-6">
               {/* Voided Banner */}
@@ -834,13 +821,13 @@ const FinanceAudit = () => {
                 <div className={cn(
                   "p-5 rounded-2xl border-2",
                   difference === 0 ? 'bg-ios-green/5 border-ios-green/30' :
-                  difference < 0 ? 'bg-ios-red/5 border-ios-red/30' : 'bg-ios-blue/5 border-ios-blue/30'
+                    difference < 0 ? 'bg-ios-red/5 border-ios-red/30' : 'bg-ios-blue/5 border-ios-blue/30'
                 )}>
                   <div className="flex items-center gap-2 mb-4">
                     <Save className="h-5 w-5 text-ios-gray-600" />
                     <p className="font-semibold text-ios-gray-900">Auditoría Automática</p>
                   </div>
-                  
+
                   <div className="grid grid-cols-3 gap-4 text-center mb-4">
                     <div>
                       <p className="text-sm text-ios-gray-500">Esperado</p>
@@ -855,10 +842,10 @@ const FinanceAudit = () => {
                       <p className={cn(
                         "text-xl font-bold",
                         difference === 0 ? 'text-ios-green' :
-                        difference < 0 ? 'text-ios-red' : 'text-ios-blue'
+                          difference < 0 ? 'text-ios-red' : 'text-ios-blue'
                       )}>
                         {difference === 0 ? '$0.00' :
-                         difference < 0 ? `-$${Math.abs(difference).toFixed(2)}` : `+$${difference.toFixed(2)}`}
+                          difference < 0 ? `-$${Math.abs(difference).toFixed(2)}` : `+$${difference.toFixed(2)}`}
                       </p>
                     </div>
                   </div>
@@ -866,15 +853,15 @@ const FinanceAudit = () => {
                   <div className={cn(
                     "p-3 rounded-xl text-center",
                     difference === 0 ? 'bg-ios-green/10' :
-                    difference < 0 ? 'bg-ios-red/10' : 'bg-ios-blue/10'
+                      difference < 0 ? 'bg-ios-red/10' : 'bg-ios-blue/10'
                   )}>
                     <p className={cn(
                       "text-lg font-bold",
                       difference === 0 ? 'text-ios-green' :
-                      difference < 0 ? 'text-ios-red' : 'text-ios-blue'
+                        difference < 0 ? 'text-ios-red' : 'text-ios-blue'
                     )}>
                       {difference === 0 ? '✓ CUADRA PERFECTO' :
-                       difference < 0 ? '⚠️ FALTANTE' : '📈 SOBRANTE'}
+                        difference < 0 ? '⚠️ FALTANTE' : '📈 SOBRANTE'}
                     </p>
                   </div>
                 </div>
@@ -898,14 +885,14 @@ const FinanceAudit = () => {
               {/* Actions */}
               {selectedRegister.status === 'pending' && (
                 <div className="flex gap-3 pt-4">
-                  <button 
+                  <button
                     onClick={handleReject}
                     disabled={saving}
                     className="flex-1 h-12 rounded-xl bg-ios-red/10 text-ios-red font-semibold hover:bg-ios-red/20 transition-colors touch-feedback disabled:opacity-50"
                   >
                     Rechazar
                   </button>
-                  <button 
+                  <button
                     onClick={handleApprove}
                     disabled={saving || (useManualSource && !manualExpected)}
                     className="flex-1 h-12 rounded-xl bg-ios-green text-white font-semibold hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
@@ -936,7 +923,7 @@ const FinanceAudit = () => {
                       {selectedRegister.status === 'approved' ? '✓ Corte Aprobado' : '✗ Corte Rechazado'}
                     </p>
                   </div>
-                  
+
                   {selectedRegister.status === 'approved' && (
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
@@ -947,17 +934,17 @@ const FinanceAudit = () => {
                         <p className="text-ios-gray-500">Diferencia</p>
                         <p className={cn(
                           "font-semibold",
-                          selectedRegister.difference < 0 ? 'text-ios-red' : 
-                          selectedRegister.difference > 0 ? 'text-ios-blue' : 'text-ios-green'
+                          selectedRegister.difference < 0 ? 'text-ios-red' :
+                            selectedRegister.difference > 0 ? 'text-ios-blue' : 'text-ios-green'
                         )}>
                           {selectedRegister.difference === 0 ? 'Cuadra' :
-                           selectedRegister.difference < 0 ? `-$${Math.abs(selectedRegister.difference).toFixed(2)}` : 
-                           `+$${selectedRegister.difference.toFixed(2)}`}
+                            selectedRegister.difference < 0 ? `-$${Math.abs(selectedRegister.difference).toFixed(2)}` :
+                              `+$${selectedRegister.difference.toFixed(2)}`}
                         </p>
                       </div>
                     </div>
                   )}
-                  
+
                   {selectedRegister.admin_notes && (
                     <div className="mt-3 pt-3 border-t border-ios-gray-200">
                       <p className="text-sm text-ios-gray-500">Notas:</p>
@@ -981,19 +968,19 @@ const FinanceAudit = () => {
             <AlertDialogDescription className="text-ios-gray-500">
               {deleteType === 'void' ? (
                 <>
-                  El corte será marcado como <strong>ANULADO</strong> y no aparecerá en los reportes, 
+                  El corte será marcado como <strong>ANULADO</strong> y no aparecerá en los reportes,
                   pero se mantendrá en el historial para trazabilidad.
                 </>
               ) : (
                 <>
-                  <span className="text-ios-red font-semibold">⚠️ ADVERTENCIA:</span> Esta acción eliminará 
-                  permanentemente el corte y todos sus registros asociados (gastos, retiros). 
+                  <span className="text-ios-red font-semibold">⚠️ ADVERTENCIA:</span> Esta acción eliminará
+                  permanentemente el corte y todos sus registros asociados (gastos, retiros).
                   <strong> Esta acción NO se puede deshacer.</strong>
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           {selectedRegister && (
             <div className="my-4 p-4 rounded-xl bg-ios-gray-50">
               <div className="text-sm space-y-1">
@@ -1023,7 +1010,7 @@ const FinanceAudit = () => {
           )}
 
           <AlertDialogFooter>
-            <AlertDialogCancel 
+            <AlertDialogCancel
               className="rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 border-0"
               disabled={deleting}
             >
@@ -1034,8 +1021,8 @@ const FinanceAudit = () => {
               disabled={deleting}
               className={cn(
                 "rounded-xl font-semibold border-0",
-                deleteType === 'void' 
-                  ? 'bg-ios-orange text-white hover:bg-ios-orange/90' 
+                deleteType === 'void'
+                  ? 'bg-ios-orange text-white hover:bg-ios-orange/90'
                   : 'bg-ios-red text-white hover:bg-ios-red/90'
               )}
             >

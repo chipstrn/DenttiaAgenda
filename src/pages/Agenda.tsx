@@ -27,10 +27,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { CLINIC_CONFIG, generateWhatsAppLink, generateAppointmentReminder } from '@/config/clinic';
-import { 
-  Plus, Clock, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, 
+import {
+  Plus, Clock, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight,
   Loader2, MapPin, Phone, MessageCircle, Search, UserPlus, Coffee, X,
-  Check, XCircle, RotateCcw, AlertTriangle
+  Check, XCircle, RotateCcw, AlertTriangle, LayoutList, LayoutGrid
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, addDays, subDays, isSameDay, parseISO } from 'date-fns';
@@ -49,6 +49,7 @@ interface Appointment {
   type: 'medical' | 'personal';
   location_id: string | null;
   patient_data_status: string;
+  doctor_id: string | null;
   patients?: {
     id: string;
     first_name: string;
@@ -75,6 +76,8 @@ interface Treatment {
   name: string;
   duration_minutes: number;
   base_price: number;
+  commission_percentage?: number;
+  commission_type?: 'percent' | 'fixed';
 }
 
 const STATUS_OPTIONS = [
@@ -101,6 +104,8 @@ const Agenda = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [locations, setLocations] = useState<Location[]>([]);
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +116,10 @@ const Agenda = () => {
   const [appointmentType, setAppointmentType] = useState<'medical' | 'personal'>('medical');
   const [patientSearch, setPatientSearch] = useState('');
   const [showQuickRegister, setShowQuickRegister] = useState(false);
-  
+  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
+
   // Form states for medical appointment
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedTreatmentId, setSelectedTreatmentId] = useState('');
@@ -121,19 +129,19 @@ const Agenda = () => {
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
   const [status, setStatus] = useState('scheduled');
-  
+
   // Quick register states
   const [quickFirstName, setQuickFirstName] = useState('');
   const [quickLastName, setQuickLastName] = useState('');
   const [quickPhone, setQuickPhone] = useState('');
-  
+
   // Personal event states
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
-      const [appointmentsResult, patientsResult, locationsResult, treatmentsResult] = await Promise.all([
+      const [appointmentsResult, patientsResult, locationsResult, treatmentsResult, doctorsResult] = await Promise.all([
         supabase
           .from('appointments')
           .select('*, patients(id, first_name, last_name, phone)')
@@ -149,20 +157,27 @@ const Agenda = () => {
           .order('name', { ascending: true }),
         supabase
           .from('treatments')
-          .select('id, name, duration_minutes, base_price')
+          .select('id, name, duration_minutes, base_price, commission_percentage, commission_type')
           .eq('is_active', true)
-          .order('name', { ascending: true })
+          .order('name', { ascending: true }),
+        supabase
+          .from('doctors')
+          .select('id, full_name, color')
+          .eq('is_active', true)
+          .order('full_name', { ascending: true })
       ]);
 
       if (appointmentsResult.error) throw appointmentsResult.error;
       if (patientsResult.error) throw patientsResult.error;
       if (locationsResult.error) throw locationsResult.error;
       if (treatmentsResult.error) throw treatmentsResult.error;
+      if (doctorsResult.error) throw doctorsResult.error;
 
       setAppointments(appointmentsResult.data || []);
       setPatients(patientsResult.data || []);
       setLocations(locationsResult.data || []);
       setTreatments(treatmentsResult.data || []);
+      setDoctors(doctorsResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -192,6 +207,7 @@ const Agenda = () => {
   const resetForm = useCallback(() => {
     setSelectedPatientId('');
     setSelectedTreatmentId('');
+    setSelectedDoctorId('');
     setTitle('');
     setDescription('');
     setAppointmentDate(format(new Date(), 'yyyy-MM-dd'));
@@ -206,6 +222,7 @@ const Agenda = () => {
     setEventTitle('');
     setEventDescription('');
     setAppointmentType('medical');
+    setEditingAppointmentId(null);
   }, []);
 
   const handleQuickRegister = async () => {
@@ -275,24 +292,38 @@ const Agenda = () => {
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),
         status: appointmentType === 'medical' ? status : 'confirmed',
+        treatment_type: appointmentType === 'medical' ? selectedTreatmentId : null,
         type: appointmentType,
         location_id: selectedLocation !== 'all' ? selectedLocation : null,
-        patient_data_status: 'complete'
+        patient_data_status: 'complete',
+        doctor_id: appointmentType === 'medical' ? selectedDoctorId : null
       };
 
-      const { error } = await supabase
-        .from('appointments')
-        .insert(appointmentData);
+      if (editingAppointmentId) {
+        // Update existing appointment
+        const { error } = await supabase
+          .from('appointments')
+          .update(appointmentData)
+          .eq('id', editingAppointmentId);
 
-      if (error) throw error;
-      
-      toast.success(appointmentType === 'medical' ? 'Cita creada' : 'Evento creado');
+        if (error) throw error;
+        toast.success(appointmentType === 'medical' ? 'Cita actualizada' : 'Evento actualizado');
+      } else {
+        // Create new appointment
+        const { error } = await supabase
+          .from('appointments')
+          .insert(appointmentData);
+
+        if (error) throw error;
+        toast.success(appointmentType === 'medical' ? 'Cita creada' : 'Evento creado');
+      }
+
       setIsDialogOpen(false);
       resetForm();
       fetchData();
     } catch (error) {
-      console.error('Error creating appointment:', error);
-      toast.error('Error al crear');
+      console.error('Error saving appointment:', error);
+      toast.error('Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -306,8 +337,111 @@ const Agenda = () => {
         .eq('id', id);
 
       if (error) throw error;
-      
-      setAppointments(prev => 
+
+      // Finance Trigger: If completed, create payment record
+      if (newStatus === 'completed') {
+        const appointment = appointments.find(a => a.id === id);
+        if (appointment && appointment.type === 'medical') {
+          // Find price
+          let amount = 0;
+          if (appointment.treatment_type) {
+            const treatment = treatments.find(t => t.id === appointment.treatment_type);
+            if (treatment) amount = treatment.base_price;
+          } else {
+            // Fallback: try to match by title
+            const treatment = treatments.find(t => t.name === appointment.title);
+            if (treatment) amount = treatment.base_price;
+          }
+
+          // Check if payment already exists
+          const { data: existing } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('appointment_id', id)
+            .single();
+          if (!existing) {
+            await supabase
+              .from('payments')
+              .insert({
+                appointment_id: id,
+                amount: amount,
+                status: 'pending', // Pending collection
+                patient_id: appointment.patient_id,
+                created_at: new Date().toISOString()
+              });
+            toast.success('Clínica: Cargo enviado a finanzas');
+          }
+
+
+          // Commission Trigger
+          if (appointment.doctor_id) {
+            let commissionPercentage = 0;
+            let commissionAmount = 0;
+            let commissionSource = '';
+
+            // 1. Check Treatment Commission
+            if (appointment.treatment_type) {
+              const treatment = treatments.find(t => t.id === appointment.treatment_type);
+              if (treatment?.commission_percentage && treatment.commission_percentage > 0) {
+                const type = treatment.commission_type || 'percent';
+
+                if (type === 'percent') {
+                  commissionPercentage = treatment.commission_percentage;
+                  commissionSource = 'treatment';
+                } else {
+                  commissionAmount = treatment.commission_percentage;
+                  commissionSource = 'treatment_fixed';
+                }
+              }
+            }
+
+            // 2. Check Doctor Global Commission (Fallback)
+            if (commissionSource === '') {
+              const { data: settings } = await supabase
+                .from('commission_settings')
+                .select('percentage')
+                .eq('doctor_id', appointment.doctor_id)
+                .single();
+
+              if (settings?.percentage) {
+                commissionPercentage = settings.percentage;
+                commissionSource = 'doctor_global';
+              }
+            }
+
+            if (commissionPercentage > 0 || commissionAmount > 0) {
+              if (commissionSource !== 'treatment_fixed') {
+                commissionAmount = (amount * commissionPercentage) / 100;
+              }
+
+              // Check duplicate commission
+              const { data: existingComm } = await supabase
+                .from('doctor_commissions')
+                .select('id')
+                .eq('appointment_id', id)
+                .single();
+
+              if (!existingComm) {
+                await supabase.from('doctor_commissions').insert({
+                  doctor_id: appointment.doctor_id,
+                  appointment_id: id,
+                  amount: commissionAmount,
+                  status: 'pending',
+                  created_at: new Date().toISOString()
+                });
+
+                const msg = commissionSource === 'treatment_fixed'
+                  ? `Comisión fija generada ($${commissionAmount})`
+                  : `Comisión generada (${commissionPercentage}%)`;
+
+                toast.success(msg);
+              }
+            }
+          }
+        }
+      }
+
+      setAppointments(prev =>
         prev.map(apt => apt.id === id ? { ...apt, status: newStatus } : apt)
       );
       toast.success('Estado actualizado');
@@ -315,7 +449,7 @@ const Agenda = () => {
       console.error('Error updating status:', error);
       toast.error('Error al actualizar');
     }
-  }, []);
+  }, [appointments, treatments]);
 
   const sendWhatsAppReminder = useCallback((appointment: Appointment) => {
     if (!appointment.patients?.phone) {
@@ -326,7 +460,7 @@ const Agenda = () => {
     const patientName = `${appointment.patients.first_name} ${appointment.patients.last_name}`;
     const date = format(new Date(appointment.start_time), "EEEE d 'de' MMMM", { locale: es });
     const time = format(new Date(appointment.start_time), 'HH:mm');
-    
+
     const message = generateAppointmentReminder(
       patientName,
       date,
@@ -338,7 +472,7 @@ const Agenda = () => {
     const phoneNumber = appointment.patients.phone.replace(/\D/g, '');
     const fullPhone = phoneNumber.startsWith('52') ? phoneNumber : `52${phoneNumber}`;
     const link = generateWhatsAppLink(message, fullPhone);
-    
+
     window.open(link, '_blank');
   }, []);
 
@@ -355,7 +489,7 @@ const Agenda = () => {
   const filteredPatients = useMemo(() => {
     if (!patientSearch) return patients.slice(0, 10);
     const search = patientSearch.toLowerCase();
-    return patients.filter(p => 
+    return patients.filter(p =>
       `${p.first_name} ${p.last_name}`.toLowerCase().includes(search) ||
       p.phone?.includes(patientSearch)
     ).slice(0, 10);
@@ -366,7 +500,7 @@ const Agenda = () => {
       case 'confirmed': return 'bg-ios-green/15 text-ios-green';
       case 'in-progress': return 'bg-ios-blue/15 text-ios-blue';
       case 'completed': return 'bg-ios-gray-200 text-ios-gray-600';
-      case 'cancelled': 
+      case 'cancelled':
       case 'noshow': return 'bg-ios-red/15 text-ios-red';
       case 'rescheduled':
       case 'postponed': return 'bg-ios-purple/15 text-ios-purple';
@@ -396,8 +530,8 @@ const Agenda = () => {
               ))}
             </SelectContent>
           </Select>
-          
-          <button 
+
+          <button
             onClick={() => setIsDialogOpen(true)}
             className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
           >
@@ -407,173 +541,557 @@ const Agenda = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Calendar */}
-        <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
-          <h2 className="text-lg font-bold text-ios-gray-900 mb-4 flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-ios-blue" />
-            Calendario
-          </h2>
-          <Calendar
-            mode="single"
-            selected={selectedDate}
-            onSelect={(date) => date && setSelectedDate(date)}
-            className="rounded-2xl"
-            locale={es}
-          />
-          
-          {/* Clinic Info */}
-          <div className="mt-4 pt-4 border-t border-ios-gray-100">
-            <p className="text-xs text-ios-gray-500 font-medium mb-2">Horarios de atención</p>
-            <p className="text-xs text-ios-gray-600">{CLINIC_CONFIG.scheduleText.weekdays}</p>
-            <p className="text-xs text-ios-gray-600">{CLINIC_CONFIG.scheduleText.saturday}</p>
-            <p className="text-xs text-ios-gray-600">{CLINIC_CONFIG.scheduleText.sunday}</p>
-          </div>
-        </div>
-
-        {/* Day View */}
-        <div className="lg:col-span-3 ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '100ms' }}>
-          {/* Date Navigation */}
-          <div className="flex items-center justify-between p-5 border-b border-ios-gray-100">
-            <button 
-              onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+      <div className="space-y-6">
+        {/* Horizontal Week Navigation */}
+        <div className="ios-card p-4 animate-slide-up" style={{ animationDelay: '50ms' }}>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setSelectedDate(subDays(selectedDate, 7))}
               className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
             >
               <ChevronLeft className="h-5 w-5 text-ios-gray-600" />
             </button>
             <div className="text-center">
-              <h2 className="text-lg font-bold text-ios-gray-900">
-                {format(selectedDate, "EEEE", { locale: es })}
-              </h2>
-              <p className="text-sm text-ios-gray-500">
-                {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
+              <p className="text-sm font-medium text-ios-gray-500">
+                {format(selectedDate, 'MMMM yyyy', { locale: es })}
               </p>
             </div>
-            <button 
-              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, 7))}
               className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
             >
               <ChevronRight className="h-5 w-5 text-ios-gray-600" />
             </button>
           </div>
 
-          {/* Appointments */}
-          <div className="p-3 max-h-[600px] overflow-y-auto">
+          {/* Week Days Strip */}
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {Array.from({ length: 7 }, (_, i) => {
+              const date = addDays(subDays(selectedDate, selectedDate.getDay()), i);
+              const isSelected = isSameDay(date, selectedDate);
+              const isToday = isSameDay(date, new Date());
+              const dayAppointments = appointments.filter(
+                apt => isSameDay(parseISO(apt.start_time), date)
+              ).length;
+
+              return (
+                <button
+                  key={i}
+                  onClick={() => setSelectedDate(date)}
+                  className={cn(
+                    "flex-1 min-w-[70px] py-3 px-2 rounded-2xl transition-all duration-300 ease-out touch-feedback relative",
+                    isSelected
+                      ? "bg-gradient-to-br from-ios-blue to-blue-600 text-white shadow-lg shadow-ios-blue/30 scale-105"
+                      : isToday
+                        ? "bg-ios-blue/10 text-ios-blue hover:bg-ios-blue/20"
+                        : "bg-ios-gray-50 hover:bg-ios-gray-100 text-ios-gray-700"
+                  )}
+                >
+                  <p className={cn(
+                    "text-xs font-medium uppercase tracking-wide",
+                    isSelected ? "text-white/80" : "text-ios-gray-500"
+                  )}>
+                    {format(date, 'EEE', { locale: es })}
+                  </p>
+                  <p className={cn(
+                    "text-2xl font-bold mt-1",
+                    isSelected ? "text-white" : ""
+                  )}>
+                    {format(date, 'd')}
+                  </p>
+                  {dayAppointments > 0 && (
+                    <div className={cn(
+                      "absolute -top-1 -right-1 h-5 w-5 rounded-full text-xs font-bold flex items-center justify-center",
+                      isSelected
+                        ? "bg-white text-ios-blue"
+                        : "bg-ios-orange text-white"
+                    )}>
+                      {dayAppointments}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Doctor Filter Chips */}
+        {doctors.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <button
+              onClick={() => setSelectedDoctorId('all')}
+              className={cn(
+                "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all",
+                selectedDoctorId === 'all'
+                  ? "bg-ios-gray-900 text-white"
+                  : "bg-white border border-ios-gray-200 text-ios-gray-600 hover:bg-ios-gray-50"
+              )}
+            >
+              Todos los doctores
+            </button>
+            {doctors.map((doctor) => (
+              <button
+                key={doctor.id}
+                onClick={() => setSelectedDoctorId(doctor.id)}
+                className={cn(
+                  "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2",
+                  selectedDoctorId === doctor.id
+                    ? "text-white shadow-lg"
+                    : "bg-white border border-ios-gray-200 text-ios-gray-600 hover:bg-ios-gray-50"
+                )}
+                style={selectedDoctorId === doctor.id ? { backgroundColor: doctor.color } : {}}
+              >
+                <div
+                  className="h-3 w-3 rounded-full"
+                  style={{ backgroundColor: selectedDoctorId !== doctor.id ? doctor.color : 'white' }}
+                />
+                {doctor.full_name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Main Day View - Full Width */}
+        <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '150ms' }}>
+          {/* Date Header with View Toggle */}
+          <div className="p-5 border-b border-ios-gray-100 bg-gradient-to-r from-ios-gray-50 to-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+                  className="h-9 w-9 rounded-xl bg-white border border-ios-gray-200 flex items-center justify-center hover:bg-ios-gray-50 transition-colors touch-feedback"
+                >
+                  <ChevronLeft className="h-4 w-4 text-ios-gray-600" />
+                </button>
+                <div>
+                  <h2 className="text-2xl font-bold text-ios-gray-900 capitalize">
+                    {format(selectedDate, "EEEE", { locale: es })}
+                  </h2>
+                  <p className="text-ios-gray-500 font-medium">
+                    {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+                  className="h-9 w-9 rounded-xl bg-white border border-ios-gray-200 flex items-center justify-center hover:bg-ios-gray-50 transition-colors touch-feedback"
+                >
+                  <ChevronRight className="h-4 w-4 text-ios-gray-600" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Today Button */}
+                <button
+                  onClick={() => setSelectedDate(new Date())}
+                  className="px-4 h-9 rounded-xl bg-ios-blue/10 text-ios-blue text-sm font-semibold hover:bg-ios-blue/20 transition-colors"
+                >
+                  Hoy
+                </button>
+
+                {/* Calendar Toggle */}
+                <button
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className={cn(
+                    "h-9 w-9 rounded-xl flex items-center justify-center transition-colors touch-feedback",
+                    showCalendar
+                      ? "bg-ios-blue text-white"
+                      : "bg-white border border-ios-gray-200 text-ios-gray-600 hover:bg-ios-gray-50"
+                  )}
+                  title="Mostrar calendario"
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                </button>
+
+                {/* View Toggle */}
+                <div className="flex items-center bg-ios-gray-100 rounded-xl p-1">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={cn(
+                      "h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all",
+                      viewMode === 'list'
+                        ? "bg-white text-ios-gray-900 shadow-sm"
+                        : "text-ios-gray-500 hover:text-ios-gray-700"
+                    )}
+                  >
+                    <LayoutList className="h-3.5 w-3.5" />
+                    Lista
+                  </button>
+                  <button
+                    onClick={() => setViewMode('timeline')}
+                    className={cn(
+                      "h-7 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all",
+                      viewMode === 'timeline'
+                        ? "bg-white text-ios-gray-900 shadow-sm"
+                        : "text-ios-gray-500 hover:text-ios-gray-700"
+                    )}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    Timeline
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar Dropdown */}
+            {showCalendar && (
+              <div className="mt-4 pt-4 border-t border-ios-gray-100 flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      setSelectedDate(date);
+                      setShowCalendar(false);
+                    }
+                  }}
+                  className="rounded-2xl"
+                  locale={es}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Content Area */}
+          <div className="p-4">
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
               </div>
-            ) : filteredAppointments.length > 0 ? (
-              <div className="space-y-2">
-                {filteredAppointments.map((apt, index) => (
-                  <div
-                    key={apt.id}
-                    className={cn(
-                      "flex items-center gap-4 p-4 rounded-2xl transition-all duration-200 ease-ios animate-fade-in",
-                      apt.type === 'personal' 
-                        ? 'bg-ios-gray-100 border-2 border-dashed border-ios-gray-300' 
-                        : 'hover:bg-ios-gray-50'
-                    )}
-                    style={{ animationDelay: `${150 + index * 50}ms` }}
-                  >
-                    {/* Time */}
-                    <div className="text-center min-w-[70px]">
-                      <p className="text-lg font-bold text-ios-gray-900">
-                        {format(new Date(apt.start_time), 'HH:mm')}
-                      </p>
-                      <p className="text-xs text-ios-gray-500">
-                        {format(new Date(apt.end_time), 'HH:mm')}
-                      </p>
-                    </div>
-                    
-                    {/* Color bar */}
-                    <div className={cn(
-                      "h-12 w-1 rounded-full",
-                      apt.type === 'personal' ? 'bg-ios-gray-400' : 'bg-ios-blue'
-                    )}></div>
-                    
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-ios-gray-900">{apt.title}</p>
-                        {apt.type === 'personal' && (
-                          <span className="px-2 py-0.5 rounded-full bg-ios-gray-200 text-ios-gray-600 text-xs font-medium">
-                            <Coffee className="h-3 w-3 inline mr-1" />
-                            Personal
-                          </span>
-                        )}
-                        {apt.patient_data_status === 'pending' && (
-                          <span className="px-2 py-0.5 rounded-full bg-ios-orange/15 text-ios-orange text-xs font-medium">
-                            Datos Pendientes
-                          </span>
-                        )}
-                      </div>
-                      {apt.type !== 'personal' && apt.patients && (
-                        <p className="text-sm text-ios-gray-500 flex items-center gap-1">
-                          <User className="h-3.5 w-3.5" />
-                          {apt.patients.first_name} {apt.patients.last_name}
-                          {apt.patients.phone && (
-                            <span className="ml-2 flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {apt.patients.phone}
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </div>
+            ) : viewMode === 'list' ? (
+              /* LIST VIEW */
+              filteredAppointments.length > 0 ? (
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {filteredAppointments.map((apt, index) => {
+                    const doctorColor = doctors.find(d => d.id === apt.doctor_id)?.color || '#007AFF';
+                    const statusOption = STATUS_OPTIONS.find(s => s.value === apt.status);
 
-                    {/* Actions */}
-                    {apt.type !== 'personal' && (
-                      <>
-                        {/* WhatsApp Button */}
-                        <button
-                          onClick={() => sendWhatsAppReminder(apt)}
-                          className="h-9 w-9 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green/20 transition-colors touch-feedback"
-                          title="Enviar recordatorio por WhatsApp"
-                        >
-                          <MessageCircle className="h-4 w-4 text-ios-green" />
-                        </button>
+                    return (
+                      <div
+                        key={apt.id}
+                        className={cn(
+                          "group relative rounded-2xl transition-all duration-300 ease-out animate-fade-in overflow-hidden cursor-pointer",
+                          apt.type === 'personal'
+                            ? 'bg-gradient-to-r from-ios-gray-100 to-ios-gray-50 border-2 border-dashed border-ios-gray-300'
+                            : 'bg-white border border-ios-gray-100 hover:border-ios-gray-200 hover:shadow-lg hover:shadow-ios-gray-100/50 hover:scale-[1.01]'
+                        )}
+                        style={{ animationDelay: `${150 + index * 50}ms` }}
+                        onDoubleClick={() => {
+                          setEditingAppointmentId(apt.id);
+                          setAppointmentType(apt.type);
+                          if (apt.type === 'medical') {
+                            setTitle(apt.title);
+                            setDescription(apt.description || '');
+                            setSelectedPatientId(apt.patient_id || '');
+                            setSelectedDoctorId(apt.doctor_id || '');
+                            setSelectedTreatmentId(apt.treatment_type || '');
+                            setStatus(apt.status);
+                          } else {
+                            setEventTitle(apt.title);
+                            setEventDescription(apt.description || '');
+                          }
+                          setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
+                          setStartTime(format(new Date(apt.start_time), 'HH:mm'));
+                          setEndTime(format(new Date(apt.end_time), 'HH:mm'));
+                          setIsDialogOpen(true);
+                        }}
+                      >
+                        {apt.type !== 'personal' && (
+                          <div
+                            className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl"
+                            style={{ backgroundColor: doctorColor }}
+                          />
+                        )}
 
-                        {/* Status Selector */}
-                        <Select
-                          value={apt.status}
-                          onValueChange={(value) => updateStatus(apt.id, value)}
-                        >
-                          <SelectTrigger className={cn(
-                            "w-[130px] h-9 rounded-full border-0 text-xs font-semibold",
-                            getStatusStyle(apt.status)
-                          )}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl">
-                            {STATUS_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                <span className={cn("flex items-center gap-2", option.color)}>
-                                  <option.icon className="h-3 w-3" />
-                                  {option.label}
+                        <div className="flex items-center gap-4 p-4 pl-5">
+                          <div className="text-center min-w-[65px]">
+                            <div className={cn(
+                              "inline-flex flex-col items-center px-3 py-2 rounded-xl",
+                              apt.type === 'personal'
+                                ? "bg-ios-gray-200"
+                                : "bg-gradient-to-br from-ios-gray-50 to-white border border-ios-gray-100"
+                            )}>
+                              <p className="text-lg font-bold text-ios-gray-900 leading-none">
+                                {format(new Date(apt.start_time), 'HH:mm')}
+                              </p>
+                              <div className="h-px w-4 bg-ios-gray-300 my-1" />
+                              <p className="text-xs text-ios-gray-500 leading-none">
+                                {format(new Date(apt.end_time), 'HH:mm')}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-ios-gray-900 truncate">{apt.title}</p>
+                              {apt.type === 'personal' && (
+                                <span className="px-2 py-0.5 rounded-full bg-ios-gray-300/50 text-ios-gray-600 text-xs font-medium flex items-center gap-1">
+                                  <Coffee className="h-3 w-3" />
+                                  Personal
                                 </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </>
+                              )}
+                            </div>
+                            {apt.type !== 'personal' && apt.patients && (
+                              <p className="text-sm text-ios-gray-500 flex items-center gap-1.5 mt-1">
+                                <User className="h-3.5 w-3.5" />
+                                <span className="font-medium">{apt.patients.first_name} {apt.patients.last_name}</span>
+                              </p>
+                            )}
+                          </div>
+
+                          {apt.type !== 'personal' && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => sendWhatsAppReminder(apt)}
+                                className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green hover:text-white transition-all touch-feedback"
+                              >
+                                <MessageCircle className="h-4 w-4 text-ios-green" />
+                              </button>
+                              <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
+                                <SelectTrigger className={cn("w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", getStatusStyle(apt.status))}>
+                                  {statusOption && <statusOption.icon className="h-3.5 w-3.5 mr-1.5" />}
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  {STATUS_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      <span className={cn("flex items-center gap-2", option.color)}>
+                                        <option.icon className="h-3.5 w-3.5" />
+                                        {option.label}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-ios-blue/10 to-ios-purple/10 flex items-center justify-center mx-auto mb-4">
+                    <CalendarIcon className="h-10 w-10 text-ios-blue" />
+                  </div>
+                  <p className="text-lg font-bold text-ios-gray-900">Día libre</p>
+                  <p className="text-ios-gray-500 text-sm mt-1">
+                    No hay citas para {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
+                  </p>
+                  <button
+                    onClick={() => setIsDialogOpen(true)}
+                    className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-lg shadow-ios-blue/30"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Agendar cita
+                  </button>
+                </div>
+              )
+            ) : (
+              /* TIMELINE VIEW - Time Blocking */
+              <div className="relative">
+                {/* Time Grid */}
+                <div className="flex">
+                  {/* Time Labels */}
+                  <div className="w-16 flex-shrink-0">
+                    {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
+                      <div key={hour} className="h-16 flex items-start justify-end pr-3 pt-0.5">
+                        <span className="text-xs text-ios-gray-400 font-medium">
+                          {hour.toString().padStart(2, '0')}:00
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Timeline Grid */}
+                  <div className="flex-1 relative border-l border-ios-gray-200">
+                    {/* Hour Lines - Clickable for new appointments */}
+                    {Array.from({ length: 13 }, (_, i) => {
+                      const hour = i + 8;
+                      return (
+                        <div
+                          key={i}
+                          className="h-16 border-b border-ios-gray-100 hover:bg-ios-blue/5 transition-colors cursor-pointer group relative"
+                          onDoubleClick={() => {
+                            // Set the time for the new appointment
+                            const clickedTime = `${hour.toString().padStart(2, '0')}:00`;
+                            const endHour = Math.min(hour + 1, 20);
+                            const clickedEndTime = `${endHour.toString().padStart(2, '0')}:00`;
+                            setStartTime(clickedTime);
+                            setEndTime(clickedEndTime);
+                            setAppointmentDate(format(selectedDate, 'yyyy-MM-dd'));
+                            setIsDialogOpen(true);
+                          }}
+                        >
+                          {/* Visual hint on hover */}
+                          <div className="absolute inset-x-2 inset-y-1 rounded-lg border-2 border-dashed border-ios-blue/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-xs text-ios-blue font-medium opacity-0 group-hover:opacity-100">
+                              + Doble click para agendar
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Appointments as Blocks - with overlap handling */}
+                    {(() => {
+                      // Calculate overlaps for organic positioning
+                      const sortedApts = [...filteredAppointments].sort((a, b) =>
+                        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                      );
+
+                      // Group overlapping appointments
+                      const overlapGroups: Appointment[][] = [];
+                      sortedApts.forEach(apt => {
+                        const aptStart = new Date(apt.start_time).getTime();
+                        const aptEnd = new Date(apt.end_time).getTime();
+
+                        // Find if this appointment overlaps with any existing group
+                        let foundGroup = false;
+                        for (const group of overlapGroups) {
+                          const groupStart = Math.min(...group.map(a => new Date(a.start_time).getTime()));
+                          const groupEnd = Math.max(...group.map(a => new Date(a.end_time).getTime()));
+
+                          // Check if appointment overlaps with group's time range
+                          if (aptStart < groupEnd && aptEnd > groupStart) {
+                            group.push(apt);
+                            foundGroup = true;
+                            break;
+                          }
+                        }
+
+                        if (!foundGroup) {
+                          overlapGroups.push([apt]);
+                        }
+                      });
+
+                      // Create position map
+                      const positionMap = new Map<string, { left: string; width: string }>();
+                      overlapGroups.forEach(group => {
+                        const count = group.length;
+                        group.forEach((apt, idx) => {
+                          const width = `${100 / count - 1}%`;
+                          const left = `${(idx * 100) / count}%`;
+                          positionMap.set(apt.id, { left, width });
+                        });
+                      });
+
+                      return filteredAppointments.map((apt) => {
+                        const startHour = new Date(apt.start_time).getHours();
+                        const startMinutes = new Date(apt.start_time).getMinutes();
+                        const endHour = new Date(apt.end_time).getHours();
+                        const endMinutes = new Date(apt.end_time).getMinutes();
+
+                        const top = ((startHour - 8) * 64) + (startMinutes / 60 * 64);
+                        const duration = ((endHour - startHour) * 60 + (endMinutes - startMinutes));
+                        const height = Math.max(48, duration / 60 * 64);
+
+                        const doctorColor = doctors.find(d => d.id === apt.doctor_id)?.color || '#007AFF';
+                        const position = positionMap.get(apt.id) || { left: '0%', width: '100%' };
+
+                        if (startHour < 8 || startHour > 20) return null;
+
+                        return (
+                          <div
+                            key={apt.id}
+                            className={cn(
+                              "absolute rounded-xl p-2 cursor-pointer transition-all hover:scale-[1.02] hover:z-10 shadow-sm",
+                              apt.type === 'personal' ? "bg-ios-gray-200/80" : ""
+                            )}
+                            style={{
+                              top: `${top}px`,
+                              height: `${height}px`,
+                              left: `calc(${position.left} + 4px)`,
+                              width: `calc(${position.width} - 8px)`,
+                              backgroundColor: apt.type !== 'personal' ? `${doctorColor}20` : undefined,
+                              borderLeft: apt.type !== 'personal' ? `3px solid ${doctorColor}` : '3px solid #8E8E93'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              // Pre-fill form with appointment data
+                              setEditingAppointmentId(apt.id);
+                              setAppointmentType(apt.type);
+                              if (apt.type === 'medical') {
+                                setTitle(apt.title);
+                                setDescription(apt.description || '');
+                                setSelectedPatientId(apt.patient_id || '');
+                                setSelectedDoctorId(apt.doctor_id || '');
+                                setSelectedTreatmentId(apt.treatment_type || '');
+                                setStatus(apt.status);
+                              } else {
+                                setEventTitle(apt.title);
+                                setEventDescription(apt.description || '');
+                              }
+                              setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
+                              setStartTime(format(new Date(apt.start_time), 'HH:mm'));
+                              setEndTime(format(new Date(apt.end_time), 'HH:mm'));
+                              setIsDialogOpen(true);
+                            }}
+                          >
+                            <div className="flex items-start justify-between h-full">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-ios-gray-900 truncate">{apt.title}</p>
+                                {apt.patients && height > 50 && (
+                                  <p className="text-xs text-ios-gray-600 truncate mt-0.5">
+                                    {apt.patients.first_name} {apt.patients.last_name}
+                                  </p>
+                                )}
+                                {height > 70 && (
+                                  <p className="text-xs text-ios-gray-400 mt-1">
+                                    {format(new Date(apt.start_time), 'HH:mm')} - {format(new Date(apt.end_time), 'HH:mm')}
+                                  </p>
+                                )}
+                              </div>
+                              <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
+                                <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
+                                  {STATUS_OPTIONS.find(s => s.value === apt.status) && (
+                                    <div className="h-2 w-2 rounded-full bg-current" />
+                                  )}
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  {STATUS_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      <span className={cn("flex items-center gap-2", option.color)}>
+                                        <option.icon className="h-3 w-3" />
+                                        {option.label}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+
+                    {/* Current Time Indicator */}
+                    {isSameDay(selectedDate, new Date()) && (
+                      <div
+                        className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
+                        style={{
+                          top: `${((new Date().getHours() - 8) * 64) + (new Date().getMinutes() / 60 * 64)}px`
+                        }}
+                      >
+                        <div className="h-3 w-3 rounded-full bg-ios-red -ml-1.5" />
+                        <div className="flex-1 h-0.5 bg-ios-red" />
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16">
-                <div className="h-20 w-20 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
-                  <CalendarIcon className="h-10 w-10 text-ios-gray-400" />
                 </div>
-                <p className="text-ios-gray-900 font-semibold">Sin citas</p>
-                <p className="text-ios-gray-500 text-sm mt-1">No hay citas para este día</p>
-                <button 
-                  onClick={() => setIsDialogOpen(true)}
-                  className="mt-4 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
-                >
-                  Agendar cita
-                </button>
+
+                {/* Empty State for Timeline */}
+                {filteredAppointments.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm pointer-events-none">
+                    <div className="text-center">
+                      <p className="text-ios-gray-500">Sin citas programadas</p>
+                      <p className="text-xs text-ios-gray-400 mt-1">Doble click en cualquier hora para agendar</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -587,12 +1105,14 @@ const Agenda = () => {
       }}>
         <DialogContent className="sm:max-w-[550px] rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden max-h-[90vh]">
           <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-xl font-bold text-ios-gray-900">¿Qué deseas crear?</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-ios-gray-900">
+              {editingAppointmentId ? 'Editar cita' : '¿Qué deseas crear?'}
+            </DialogTitle>
             <DialogDescription className="text-ios-gray-500">
-              Selecciona el tipo de evento para la agenda
+              {editingAppointmentId ? 'Modifica los datos de la cita' : 'Selecciona el tipo de evento para la agenda'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <Tabs value={appointmentType} onValueChange={(v) => setAppointmentType(v as 'medical' | 'personal')} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mx-6 mb-4" style={{ width: 'calc(100% - 48px)' }}>
               <TabsTrigger value="medical" className="rounded-xl">
@@ -623,7 +1143,7 @@ const Agenda = () => {
                             className="ios-input pl-10"
                           />
                         </div>
-                        
+
                         {patientSearch && (
                           <div className="border border-ios-gray-200 rounded-xl max-h-40 overflow-y-auto">
                             {filteredPatients.length > 0 ? (
@@ -660,7 +1180,7 @@ const Agenda = () => {
                             )}
                           </div>
                         )}
-                        
+
                         <button
                           type="button"
                           onClick={() => setShowQuickRegister(true)}
@@ -714,6 +1234,23 @@ const Agenda = () => {
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Doctor */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-ios-gray-600">Doctor *</Label>
+                    <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                      <SelectTrigger className="ios-input">
+                        <SelectValue placeholder="Seleccionar doctor" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {doctors.map((doctor) => (
+                          <SelectItem key={doctor.id} value={doctor.id}>
+                            {doctor.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Treatment */}
@@ -859,16 +1396,16 @@ const Agenda = () => {
                   </div>
                 )}
               </div>
-              
+
               <div className="p-6 pt-4 flex gap-3">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsDialogOpen(false)}
                   className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={saving}
                   className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"

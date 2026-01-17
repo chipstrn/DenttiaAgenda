@@ -19,9 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Plus, Users, Shield, UserCheck, 
-  Mail, Key, Loader2, AlertTriangle, Eye, EyeOff 
+import {
+  Plus, Users, Shield, UserCheck,
+  Mail, Key, Loader2, AlertTriangle, Eye, EyeOff, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -43,7 +43,7 @@ const StaffManagement = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // Individual form states
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
@@ -141,7 +141,7 @@ const StaffManagement = () => {
 
       if (error) throw error;
 
-      setStaff(prev => prev.map(s => 
+      setStaff(prev => prev.map(s =>
         s.id === userId ? { ...s, is_active: !currentStatus } : s
       ));
       toast.success(currentStatus ? 'Usuario desactivado' : 'Usuario activado');
@@ -160,13 +160,32 @@ const StaffManagement = () => {
 
       if (error) throw error;
 
-      setStaff(prev => prev.map(s => 
+      setStaff(prev => prev.map(s =>
         s.id === userId ? { ...s, must_change_password: true } : s
       ));
       toast.success('El usuario deberá cambiar su contraseña en el próximo inicio');
     } catch (error) {
       console.error('Error resetting password flag:', error);
       toast.error('Error al marcar cambio de contraseña');
+    }
+  }, []);
+
+  const handleDelete = useCallback(async (userId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar a este usuario? Esta acción no se puede deshacer.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setStaff(prev => prev.filter(s => s.id !== userId));
+      toast.success('Usuario eliminado permanentemente');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Error al eliminar usuario');
     }
   }, []);
 
@@ -199,7 +218,7 @@ const StaffManagement = () => {
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Gestión de Personal</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">Administra usuarios del sistema</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsDialogOpen(true)}
           className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
         >
@@ -230,7 +249,7 @@ const StaffManagement = () => {
           <p className="text-2xl font-bold text-ios-gray-900">{staff.length}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Total Usuarios</p>
         </div>
-        
+
         <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
           <div className="flex items-start justify-between mb-4">
             <div className="h-11 w-11 rounded-2xl bg-ios-green flex items-center justify-center">
@@ -240,7 +259,7 @@ const StaffManagement = () => {
           <p className="text-2xl font-bold text-ios-gray-900">{activeCount}</p>
           <p className="text-sm text-ios-gray-500 font-medium mt-1">Usuarios Activos</p>
         </div>
-        
+
         <div className="ios-card p-5 animate-slide-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-start justify-between mb-4">
             <div className="h-11 w-11 rounded-2xl bg-ios-red flex items-center justify-center">
@@ -257,7 +276,7 @@ const StaffManagement = () => {
         <div className="p-5 border-b border-ios-gray-100">
           <h2 className="text-lg font-bold text-ios-gray-900">Lista de Personal</h2>
         </div>
-        
+
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
@@ -265,7 +284,7 @@ const StaffManagement = () => {
         ) : staff.length > 0 ? (
           <div className="divide-y divide-ios-gray-100">
             {staff.map((member, index) => (
-              <div 
+              <div
                 key={member.id}
                 className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios animate-fade-in"
                 style={{ animationDelay: `${200 + index * 30}ms` }}
@@ -276,7 +295,7 @@ const StaffManagement = () => {
                 )}>
                   {member.first_name?.[0]?.toUpperCase() || 'U'}
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-ios-gray-900">
@@ -297,8 +316,8 @@ const StaffManagement = () => {
                     <span className={cn(
                       "text-xs px-2 py-0.5 rounded-full font-medium",
                       member.role === 'admin' ? 'bg-ios-red/10 text-ios-red' :
-                      member.role === 'recepcion' ? 'bg-ios-blue/10 text-ios-blue' :
-                      'bg-ios-green/10 text-ios-green'
+                        member.role === 'recepcion' ? 'bg-ios-blue/10 text-ios-blue' :
+                          'bg-ios-green/10 text-ios-green'
                     )}>
                       {getRoleLabel(member.role)}
                     </span>
@@ -317,6 +336,14 @@ const StaffManagement = () => {
                     title="Forzar cambio de contraseña"
                   >
                     <Key className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(member.id)}
+                    className="h-9 px-3 rounded-lg bg-ios-red/10 text-ios-red text-sm font-medium hover:bg-ios-red/20 transition-colors"
+                    title="Eliminar usuario"
+                    disabled={member.role === 'admin'}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </button>
                   <Switch
                     checked={member.is_active !== false}
@@ -350,7 +377,7 @@ const StaffManagement = () => {
               Crea una cuenta para un nuevo miembro del equipo
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleCreateUser}>
             <div className="px-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -429,16 +456,16 @@ const StaffManagement = () => {
                 </Select>
               </div>
             </div>
-            
+
             <div className="p-6 pt-4 flex gap-3">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsDialogOpen(false)}
                 className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="submit"
                 disabled={saving}
                 className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"

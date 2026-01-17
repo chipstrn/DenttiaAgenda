@@ -9,6 +9,7 @@ import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import BirthdayList from '@/components/dashboard/BirthdayList';
 
 interface StatCardProps {
   title: string;
@@ -69,7 +70,7 @@ const AppointmentItem = ({ time, patient, treatment, status, delay = 0, onClick 
   };
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className="flex items-center gap-4 p-4 rounded-2xl hover:bg-ios-gray-100 transition-all duration-200 ease-ios cursor-pointer touch-feedback animate-slide-up"
       style={{ animationDelay: `${delay}ms` }}
@@ -94,7 +95,7 @@ const AppointmentItem = ({ time, patient, treatment, status, delay = 0, onClick 
 };
 
 const QuickAction = ({ icon: Icon, title, subtitle, color, onClick, delay = 0 }: any) => (
-  <button 
+  <button
     onClick={onClick}
     className="flex items-center gap-4 w-full p-4 rounded-2xl bg-white hover:bg-ios-gray-50 transition-all duration-200 ease-ios touch-feedback shadow-ios-sm animate-slide-up"
     style={{ animationDelay: `${delay}ms` }}
@@ -116,6 +117,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     patientsCount: 0,
     appointmentsToday: 0,
+    pendingAppointments: 0,
     monthlyRevenue: 0,
     activeTreatments: 0
   });
@@ -158,14 +160,18 @@ const Dashboard = () => {
 
       const monthlyRevenue = paymentsResult.data?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
 
+      const appointments = appointmentsResult.data || [];
+      const pendingCount = appointments.filter(a => a.status !== 'completed' && a.status !== 'cancelled').length;
+
       setStats({
         patientsCount: patientsResult.count || 0,
-        appointmentsToday: appointmentsResult.data?.length || 0,
+        appointmentsToday: appointments.length || 0,
+        pendingAppointments: pendingCount,
         monthlyRevenue,
         activeTreatments: treatmentsResult.count || 0
       });
 
-      setTodaysAppointments(appointmentsResult.data || []);
+      setTodaysAppointments(appointments);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -177,14 +183,11 @@ const Dashboard = () => {
     fetchData();
   }, [fetchData]);
 
-  // Supabase Realtime subscription to auto-refresh appointments and stats
+  // Supabase Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('realtime-appointments')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, () => {
-        fetchData();
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
         fetchData();
       })
       .subscribe();
@@ -240,113 +243,114 @@ const Dashboard = () => {
         />
       </div>
 
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Appointments */}
+        {/* Left Column - Today's Agenda (spans 2 columns on large screens) */}
         <div className="lg:col-span-2">
           <div className="ios-card overflow-hidden animate-slide-up" style={{ animationDelay: '200ms' }}>
-            <div className="flex items-center justify-between p-5 pb-3">
+            <div className="p-5 border-b border-ios-gray-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-ios-gray-900">Citas de Hoy</h2>
-                <p className="text-sm text-ios-gray-500">{stats.appointmentsToday} citas programadas</p>
+                <h2 className="text-xl font-bold text-ios-gray-900 tracking-tight">Agenda de Hoy</h2>
+                <p className="text-ios-gray-500 text-sm font-medium mt-1">
+                  {format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+                </p>
               </div>
-              <button 
+              <button
                 onClick={() => navigate('/agenda')}
-                className="flex items-center gap-1 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity touch-feedback"
+                className="text-ios-blue text-sm font-semibold hover:opacity-70 transition-opacity"
               >
-                Ver todas
-                <ChevronRight className="h-4 w-4" />
+                Ver todo
               </button>
             </div>
-            
-            <div className="px-2 pb-3">
+
+            <div className="divide-y divide-ios-gray-100">
               {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-ios-blue" />
+                <div className="p-8 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-ios-blue" />
                 </div>
               ) : todaysAppointments.length > 0 ? (
-                <div className="space-y-1">
-                  {todaysAppointments.slice(0, 5).map((apt, index) => (
-                    <AppointmentItem 
-                      key={apt.id}
-                      time={format(new Date(apt.start_time), 'HH:mm')} 
-                      patient={`${apt.patients?.first_name || ''} ${apt.patients?.last_name || ''}`.trim() || 'Sin paciente'} 
-                      treatment={apt.title || 'Sin título'} 
-                      status={apt.status}
-                      delay={250 + (index * 50)}
-                      onClick={() => navigate('/agenda')}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="h-16 w-16 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
-                    <Calendar className="h-8 w-8 text-ios-gray-400" />
-                  </div>
-                  <p className="text-ios-gray-500 font-medium">No hay citas para hoy</p>
-                  <button 
+                todaysAppointments.slice(0, 6).map((apt, i) => (
+                  <AppointmentItem
+                    key={apt.id}
+                    time={format(new Date(apt.start_time), 'HH:mm')}
+                    patient={`${apt.patients?.first_name} ${apt.patients?.last_name}`}
+                    treatment={apt.title}
+                    status={apt.status}
+                    delay={250 + (i * 50)}
                     onClick={() => navigate('/agenda')}
-                    className="mt-3 text-ios-blue font-semibold text-sm hover:opacity-70 transition-opacity"
-                  >
-                    Agendar una cita
-                  </button>
+                  />
+                ))
+              ) : (
+                <div className="p-8 text-center text-ios-gray-500">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>No tienes citas programadas para hoy</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-ios-gray-900 animate-fade-in" style={{ animationDelay: '300ms' }}>
-            Acciones Rápidas
-          </h2>
-          
-          <QuickAction 
-            icon={Plus}
-            title="Nueva Cita"
-            subtitle="Agendar paciente"
-            color="bg-ios-blue"
-            onClick={() => navigate('/agenda')}
-            delay={350}
-          />
-          
-          <QuickAction 
-            icon={Users}
-            title="Nuevo Paciente"
-            subtitle="Registrar datos"
-            color="bg-ios-green"
-            onClick={() => navigate('/patient/new')}
-            delay={400}
-          />
-          
-          {isAdmin && (
-            <QuickAction 
-              icon={DollarSign}
-              title="Registrar Pago"
-              subtitle="Cobro rápido"
-              color="bg-ios-teal"
-              onClick={() => navigate('/finance')}
-              delay={450}
-            />
-          )}
-
-          {/* Reminder Card */}
-          <div 
-            className="p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20 animate-slide-up"
-            style={{ animationDelay: '500ms' }}
-          >
-            <div className="flex items-start gap-3">
-              <div className="h-10 w-10 rounded-xl bg-ios-orange/20 flex items-center justify-center flex-shrink-0">
-                <Clock className="h-5 w-5 text-ios-orange" />
-              </div>
-              <div>
-                <p className="font-semibold text-ios-gray-900 text-sm">Recordatorio</p>
-                <p className="text-sm text-ios-gray-600 mt-0.5">
-                  Tienes {stats.appointmentsToday} citas pendientes para hoy
-                </p>
-              </div>
+        {/* Right Column - Quick Actions, Birthday List, Reminder */}
+        <div className="space-y-5">
+          {/* Quick Actions Section */}
+          <div className="animate-fade-in" style={{ animationDelay: '250ms' }}>
+            <h3 className="text-sm font-semibold text-ios-gray-500 uppercase tracking-wider mb-3 px-1">
+              Acciones Rápidas
+            </h3>
+            <div className="space-y-3">
+              <QuickAction
+                icon={Plus}
+                title="Nueva Cita"
+                subtitle="Agendar paciente"
+                color="bg-ios-blue"
+                onClick={() => navigate('/agenda')}
+                delay={300}
+              />
+              <QuickAction
+                icon={Users}
+                title="Nuevo Paciente"
+                subtitle="Registrar datos"
+                color="bg-ios-green"
+                onClick={() => navigate('/patient/new')}
+                delay={350}
+              />
+              {isAdmin && (
+                <QuickAction
+                  icon={DollarSign}
+                  title="Registrar Pago"
+                  subtitle="Cobro rápido"
+                  color="bg-ios-teal"
+                  onClick={() => navigate('/finance')}
+                  delay={400}
+                />
+              )}
             </div>
           </div>
+
+          {/* Birthday List Widget */}
+          <div className="animate-slide-up" style={{ animationDelay: '400ms' }}>
+            <BirthdayList />
+          </div>
+
+          {/* Reminder Card */}
+          {stats.pendingAppointments > 0 && (
+            <div
+              className="p-4 rounded-2xl bg-ios-orange/10 border border-ios-orange/20 animate-slide-up"
+              style={{ animationDelay: '450ms' }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-ios-orange/20 flex items-center justify-center flex-shrink-0">
+                  <Clock className="h-5 w-5 text-ios-orange" />
+                </div>
+                <div>
+                  <p className="font-semibold text-ios-gray-900 text-sm">Recordatorio</p>
+                  <p className="text-sm text-ios-gray-600 mt-0.5">
+                    Tienes {stats.pendingAppointments} citas pendientes para hoy
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </MainLayout>

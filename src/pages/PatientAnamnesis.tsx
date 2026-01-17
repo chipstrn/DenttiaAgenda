@@ -6,10 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  AlertTriangle, 
-  Heart, 
-  Pill, 
+import {
+  AlertTriangle,
+  Heart,
+  Pill,
   Shield,
   ChevronRight,
   Check,
@@ -49,34 +49,79 @@ const DANGEROUS_MEDICATIONS = [
   'denosumab'
 ];
 
+// ToggleSection component - moved outside to avoid re-creation on each render
+const ToggleSection = ({
+  icon: Icon,
+  title,
+  subtitle,
+  color,
+  checked,
+  onCheckedChange,
+  children
+}: {
+  icon: any;
+  title: string;
+  subtitle: string;
+  color: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  children?: React.ReactNode;
+}) => (
+  <div className="ios-card overflow-hidden">
+    <div className="flex items-center justify-between p-5">
+      <div className="flex items-center gap-4">
+        <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", color)}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
+        <div>
+          <h3 className="font-bold text-ios-gray-900">{title}</h3>
+          <p className="text-sm text-ios-gray-500">{subtitle}</p>
+        </div>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        className="scale-125"
+      />
+    </div>
+    {checked && children && (
+      <div className="px-5 pb-5 pt-0 border-t border-ios-gray-100 animate-fade-in">
+        <div className="pt-4">
+          {children}
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 const PatientAnamnesis = () => {
   const navigate = useNavigate();
   const { patientId } = useParams();
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [patientName, setPatientName] = useState('');
   const [medicationAlert, setMedicationAlert] = useState<string | null>(null);
-  
+
   const [formData, setFormData] = useState({
     // Alertas Médicas
     has_allergies: false,
     allergies: [] as string[],
     allergy_notes: '',
-    
+
     has_bleeding_issues: false,
     takes_anticoagulants: false,
     anticoagulant_details: '',
-    
+
     has_chronic_diseases: false,
     chronic_disease_details: '',
     is_chronic_controlled: false,
-    
+
     has_infectious_diseases: false,
     infectious_disease_notes: '',
-    
+
     current_medications: '',
-    
+
     // Antecedentes Odontológicos
     last_dental_visit: '',
     has_current_pain: false,
@@ -191,42 +236,6 @@ const PatientAnamnesis = () => {
       setSaving(false);
     }
   };
-
-  const ToggleSection = ({ 
-    icon: Icon, 
-    title, 
-    subtitle, 
-    color, 
-    checked, 
-    onCheckedChange, 
-    children 
-  }: any) => (
-    <div className="ios-card overflow-hidden">
-      <div className="flex items-center justify-between p-5">
-        <div className="flex items-center gap-4">
-          <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", color)}>
-            <Icon className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-bold text-ios-gray-900">{title}</h3>
-            <p className="text-sm text-ios-gray-500">{subtitle}</p>
-          </div>
-        </div>
-        <Switch
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          className="scale-125"
-        />
-      </div>
-      {checked && children && (
-        <div className="px-5 pb-5 pt-0 border-t border-ios-gray-100 animate-fade-in">
-          <div className="pt-4">
-            {children}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   if (loading) {
     return (
@@ -502,7 +511,7 @@ const PatientAnamnesis = () => {
                 <span className={cn(
                   "font-bold text-2xl",
                   formData.pain_level <= 3 ? "text-ios-green" :
-                  formData.pain_level <= 6 ? "text-ios-orange" : "text-ios-red"
+                    formData.pain_level <= 6 ? "text-ios-orange" : "text-ios-red"
                 )}>
                   {formData.pain_level}
                 </span>
@@ -546,14 +555,14 @@ const PatientAnamnesis = () => {
 
         {/* Submit */}
         <div className="flex gap-4 pt-6 pb-8 animate-slide-up" style={{ animationDelay: '450ms' }}>
-          <button 
+          <button
             type="button"
             onClick={() => navigate(`/patient/${patientId}/intake`)}
             className="flex-1 h-14 rounded-2xl bg-ios-gray-100 text-ios-gray-900 font-semibold text-lg hover:bg-ios-gray-200 transition-colors touch-feedback"
           >
             Volver a Recepción
           </button>
-          <button 
+          <button
             type="submit"
             disabled={saving}
             className="flex-1 h-14 rounded-2xl bg-ios-green text-white font-semibold text-lg hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"

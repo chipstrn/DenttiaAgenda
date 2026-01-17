@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Banknote, CreditCard, ArrowUpRight, Send, 
+import {
+  Banknote, CreditCard, ArrowUpRight, Send,
   Loader2, CheckCircle, Clock, Plus, Trash2, Shield, RefreshCw, XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,7 +36,7 @@ const CashRegisterClose = () => {
   const [submitting, setSubmitting] = useState(false);
   const [existingRegister, setExistingRegister] = useState<any>(null);
   const [showNewShiftForm, setShowNewShiftForm] = useState(false);
-  
+
   // Formulario de corte - Individual states
   const [openingBalance, setOpeningBalance] = useState('');
   const [servicesCash, setServicesCash] = useState('');
@@ -47,7 +47,7 @@ const CashRegisterClose = () => {
   const [productsTransfer, setProductsTransfer] = useState('');
   const [otherIncome, setOtherIncome] = useState('');
   const [otherIncomeNotes, setOtherIncomeNotes] = useState('');
-  
+
   // Gastos y retiros
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [withdrawals, setWithdrawals] = useState<CashWithdrawal[]>([]);
@@ -84,7 +84,7 @@ const CashRegisterClose = () => {
         // Check if the register is from today
         const registerDate = parseISO(data.register_date);
         const isFromToday = isToday(registerDate);
-        
+
         // Only show existing register status if it's from today
         if (isFromToday) {
           setExistingRegister(data);
@@ -165,13 +165,13 @@ const CashRegisterClose = () => {
   const calculateTotals = useCallback(() => {
     const totalExpenses = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     const totalWithdrawals = withdrawals.reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
-    
+
     const totalCash = (parseFloat(servicesCash) || 0) + (parseFloat(productsCash) || 0) + (parseFloat(otherIncome) || 0);
     const totalCard = (parseFloat(servicesCard) || 0) + (parseFloat(productsCard) || 0);
     const totalTransfer = (parseFloat(servicesTransfer) || 0) + (parseFloat(productsTransfer) || 0);
-    
+
     const closingBalance = (parseFloat(openingBalance) || 0) + totalCash - totalExpenses - totalWithdrawals;
-    
+
     return {
       totalExpenses,
       totalWithdrawals,
@@ -186,7 +186,7 @@ const CashRegisterClose = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
-    
+
     setSubmitting(true);
 
     try {
@@ -300,7 +300,7 @@ const CashRegisterClose = () => {
             <div className={cn(
               "h-24 w-24 rounded-full flex items-center justify-center mx-auto mb-6",
               existingRegister.status === 'approved' ? 'bg-ios-green/15' :
-              existingRegister.status === 'rejected' ? 'bg-ios-red/15' : 'bg-ios-orange/15'
+                existingRegister.status === 'rejected' ? 'bg-ios-red/15' : 'bg-ios-orange/15'
             )}>
               {existingRegister.status === 'approved' ? (
                 <CheckCircle className="h-12 w-12 text-ios-green" />
@@ -310,17 +310,17 @@ const CashRegisterClose = () => {
                 <Clock className="h-12 w-12 text-ios-orange" />
               )}
             </div>
-            
+
             <h1 className="text-2xl font-bold text-ios-gray-900 mb-2">
               {existingRegister.status === 'approved' ? 'Corte Aprobado' :
-               existingRegister.status === 'rejected' ? 'Corte Rechazado' : 'Corte Enviado a Revisión'}
+                existingRegister.status === 'rejected' ? 'Corte Rechazado' : 'Corte Enviado a Revisión'}
             </h1>
             <p className="text-ios-gray-500 mb-6">
-              {existingRegister.status === 'pending' 
+              {existingRegister.status === 'pending'
                 ? 'Tu corte de caja está pendiente de revisión por el administrador.'
                 : existingRegister.status === 'approved'
-                ? 'El administrador ha aprobado tu corte de caja.'
-                : 'El administrador ha rechazado tu corte. Revisa las notas.'}
+                  ? 'El administrador ha aprobado tu corte de caja.'
+                  : 'El administrador ha rechazado tu corte. Revisa las notas.'}
             </p>
 
             <div className="ios-card p-6 text-left mb-6">
@@ -342,7 +342,7 @@ const CashRegisterClose = () => {
                   <span className="text-ios-gray-500">Total Efectivo Declarado</span>
                   <span className="font-bold text-ios-blue">${existingRegister.closing_balance.toFixed(2)}</span>
                 </div>
-                
+
                 {existingRegister.status !== 'pending' && existingRegister.admin_notes && (
                   <div className="pt-3 border-t border-ios-gray-100">
                     <p className="text-sm text-ios-gray-500 mb-1">Notas del Administrador:</p>
@@ -368,7 +368,7 @@ const CashRegisterClose = () => {
               <RefreshCw className="h-6 w-6" />
               Iniciar Nuevo Turno
             </button>
-            
+
             <p className="text-sm text-ios-gray-400 mt-3">
               Puedes registrar múltiples cortes (turnos) en un mismo día
             </p>
@@ -578,7 +578,7 @@ const CashRegisterClose = () => {
               Agregar
             </button>
           </div>
-          
+
           {expenses.length === 0 ? (
             <p className="text-ios-gray-400 text-sm text-center py-4">Sin gastos registrados</p>
           ) : (
@@ -628,7 +628,7 @@ const CashRegisterClose = () => {
               Agregar
             </button>
           </div>
-          
+
           {withdrawals.length === 0 ? (
             <p className="text-ios-gray-400 text-sm text-center py-4">Sin retiros registrados</p>
           ) : (
