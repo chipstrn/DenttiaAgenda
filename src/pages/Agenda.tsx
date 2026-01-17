@@ -1306,6 +1306,18 @@ const Agenda = () => {
                       const treatment = treatments.find(t => t.id === value);
                       if (treatment) {
                         setTitle(treatment.name);
+                        // Auto-adjust end time based on treatment duration
+                        if (treatment.duration_minutes && startTime) {
+                          const [hours, minutes] = startTime.split(':').map(Number);
+                          const startMinutes = hours * 60 + minutes;
+                          const endMinutes = startMinutes + treatment.duration_minutes;
+                          const endHours = Math.floor(endMinutes / 60);
+                          const endMins = endMinutes % 60;
+                          // Clamp to clinic hours (max 20:00)
+                          const finalHour = Math.min(endHours, 20);
+                          const finalMin = endHours >= 20 ? 0 : endMins;
+                          setEndTime(`${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`);
+                        }
                       }
                     }}>
                       <SelectTrigger className="ios-input">
