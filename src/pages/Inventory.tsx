@@ -4,7 +4,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Archive, AlertTriangle, ArrowUpRight, ArrowDownRight, Package } from 'lucide-react';
+import { Plus, Search, Archive, AlertTriangle, ArrowUpRight, ArrowDownRight, Package, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     Dialog,
@@ -38,6 +38,7 @@ const Inventory = () => {
     const { profile } = useAuth();
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isAdjustOpen, setIsAdjustOpen] = useState(false);
@@ -84,6 +85,7 @@ const Inventory = () => {
         try {
             if (!newItem.name) return toast.error('El nombre es obligatorio');
 
+            setSaving(true);
             const { error } = await supabase.from('inventory_items').insert([{
                 name: newItem.name,
                 sku: newItem.sku,
@@ -95,13 +97,15 @@ const Inventory = () => {
 
             if (error) throw error;
 
-            toast.success('Producto creado');
+            toast.success(`Producto "${newItem.name}" creado`);
             setIsAddOpen(false);
             setNewItem({ name: '', sku: '', min_stock: '5', unit: 'piezas', cost: '0', current_stock: '0' });
             fetchItems();
         } catch (error) {
             console.error('Error creating item:', error);
             toast.error('Error al crear producto');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -109,6 +113,7 @@ const Inventory = () => {
         if (!selectedItem) return;
 
         try {
+            setSaving(true);
             // 1. Create transaction
             const { error: txError } = await supabase.from('inventory_transactions').insert([{
                 item_id: selectedItem.id,
@@ -133,7 +138,7 @@ const Inventory = () => {
 
             if (updateError) throw updateError;
 
-            toast.success('Stock actualizado');
+            toast.success(`Stock de "${selectedItem.name}" actualizado: ${newStock} ${selectedItem.unit}`);
             setIsAdjustOpen(false);
             setAdjustment({ type: 'IN', quantity: '1', notes: '' });
             setSelectedItem(null);
@@ -141,6 +146,8 @@ const Inventory = () => {
         } catch (error) {
             console.error('Error adjusting stock:', error);
             toast.error('Error al ajustar stock');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -304,8 +311,11 @@ const Inventory = () => {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setIsAddOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreateItem} className="bg-ios-blue text-white">Crear</Button>
+                        <Button variant="ghost" onClick={() => setIsAddOpen(false)} disabled={saving}>Cancelar</Button>
+                        <Button onClick={handleCreateItem} className="bg-ios-blue text-white" disabled={saving}>
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {saving ? 'Creando...' : 'Crear'}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -339,12 +349,14 @@ const Inventory = () => {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setIsAdjustOpen(false)}>Cancelar</Button>
+                        <Button variant="ghost" onClick={() => setIsAdjustOpen(false)} disabled={saving}>Cancelar</Button>
                         <Button
                             onClick={handleAdjustment}
                             className={adjustment.type === 'IN' ? 'bg-ios-green text-white' : 'bg-ios-red text-white'}
+                            disabled={saving}
                         >
-                            Confirmar {adjustment.type === 'IN' ? 'Entrada' : 'Salida'}
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {saving ? 'Guardando...' : `Confirmar ${adjustment.type === 'IN' ? 'Entrada' : 'Salida'}`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
