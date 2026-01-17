@@ -26,16 +26,10 @@ import {
   Trash2,
   DollarSign,
   Check,
-  Loader2,
-  Calendar,
-  User
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useParams } from 'react-router-dom';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface ToothData {
   id?: string;
@@ -64,20 +58,6 @@ interface BudgetItem {
   total: number;
 }
 
-interface EvolutionNote {
-  id: string;
-  patient_id: string;
-  user_id: string | null;
-  note: string;
-  note_date: string;
-  tooth_number?: number;
-  tooth_condition?: string;
-  profiles?: {
-    first_name: string;
-    last_name: string;
-  };
-}
-
 const CONDITIONS = [
   'healthy', 'caries', 'filling', 'crown', 'root_canal',
   'extraction', 'missing', 'implant', 'bridge'
@@ -103,12 +83,6 @@ const PatientExam = () => {
   const [toothCondition, setToothCondition] = useState('healthy');
   const [toothNotes, setToothNotes] = useState('');
   const [toothTreatmentId, setToothTreatmentId] = useState('');
-
-  // Evolution notes state
-  const { user } = useAuth();
-  const [evolutionNotes, setEvolutionNotes] = useState<EvolutionNote[]>([]);
-  const [newEvolutionNote, setNewEvolutionNote] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
 
   useEffect(() => {
     if (patientId) {
@@ -137,8 +111,8 @@ const PatientExam = () => {
       if (!user) return;
       setUserId(user.id);
 
-      // Fetch patient, odontogram, treatments, and evolution notes in parallel
-      const [patientResult, odontogramResult, treatmentsResult, notesResult] = await Promise.all([
+      // Fetch patient and odontogram in parallel
+      const [patientResult, odontogramResult, treatmentsResult] = await Promise.all([
         supabase
           .from('patients')
           .select('first_name, last_name')
@@ -153,12 +127,7 @@ const PatientExam = () => {
           .select('id, name, base_price, category')
           .eq('user_id', user.id)
           .eq('is_active', true)
-          .order('name'),
-        supabase
-          .from('evolution_notes')
-          .select(`*, profiles:user_id (first_name, last_name)`)
-          .eq('patient_id', patientId)
-          .order('note_date', { ascending: false })
+          .order('name')
       ]);
 
       if (patientResult.data) {
@@ -172,53 +141,11 @@ const PatientExam = () => {
       setTeeth(teethMap);
 
       setTreatments(treatmentsResult.data || []);
-      setEvolutionNotes(notesResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Save evolution note
-  const handleSaveEvolutionNote = async (toothNumber?: number, toothCondition?: string) => {
-    if (!newEvolutionNote.trim() && !toothNumber) {
-      toast.error('La nota no puede estar vacía');
-      return;
-    }
-    if (!user) {
-      toast.error('Sesión no válida');
-      return;
-    }
-
-    setSavingNote(true);
-    try {
-      const noteText = toothNumber
-        ? `Diente #${toothNumber}: ${CONDITION_LABELS[toothCondition as keyof typeof CONDITION_LABELS] || toothCondition}${newEvolutionNote ? `. ${newEvolutionNote}` : ''}`
-        : newEvolutionNote;
-
-      const { error } = await supabase
-        .from('evolution_notes')
-        .insert({
-          patient_id: patientId,
-          user_id: user.id,
-          note: noteText,
-          tooth_number: toothNumber || null,
-          tooth_condition: toothCondition || null,
-          note_date: new Date().toISOString()
-        });
-
-      if (error) throw error;
-
-      toast.success('Nota de evolución guardada');
-      setNewEvolutionNote('');
-      fetchData();
-    } catch (error) {
-      console.error('Error saving note:', error);
-      toast.error('Error al guardar la nota');
-    } finally {
-      setSavingNote(false);
     }
   };
 
@@ -646,83 +573,6 @@ const PatientExam = () => {
               <p className="text-ios-gray-500 text-sm mt-1">
                 Haz clic en cualquier diente para ver o editar su información
               </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Evolution Notes Section */}
-      <div className="ios-card p-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
-        <h2 className="text-lg font-bold text-ios-gray-900 mb-4 flex items-center gap-2">
-          <FileText className="h-5 w-5 text-ios-blue" />
-          Notas de Evolución
-        </h2>
-
-        {/* New note form */}
-        <div className="mb-6 space-y-3">
-          <textarea
-            value={newEvolutionNote}
-            onChange={(e) => setNewEvolutionNote(e.target.value)}
-            className="ios-input min-h-[100px] resize-none"
-            placeholder="Escribe una nota de evolución del paciente..."
-          />
-          <button
-            onClick={() => handleSaveEvolutionNote()}
-            disabled={savingNote || !newEvolutionNote.trim()}
-            className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
-          >
-            {savingNote ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <Save className="h-5 w-5" />
-                Guardar Nota
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Notes history */}
-        <div className="space-y-3">
-          {evolutionNotes.length > 0 ? (
-            evolutionNotes.map((note, index) => (
-              <div
-                key={note.id}
-                className={cn(
-                  "p-4 rounded-xl animate-fade-in",
-                  note.tooth_number
-                    ? "bg-ios-blue/5 border border-ios-blue/20"
-                    : "bg-ios-gray-50"
-                )}
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-ios-gray-100 flex items-center justify-center">
-                      <User className="h-4 w-4 text-ios-gray-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-ios-gray-900">
-                        Dr. {note.profiles?.first_name} {note.profiles?.last_name}
-                      </p>
-                      <div className="flex items-center gap-1.5 text-xs text-ios-gray-500">
-                        <Calendar className="h-3 w-3" />
-                        {format(new Date(note.note_date), "d 'de' MMMM, yyyy", { locale: es })}
-                      </div>
-                    </div>
-                  </div>
-                  {note.tooth_number && (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-ios-blue/10 text-ios-blue rounded-full text-xs font-medium">
-                      🦷 #{note.tooth_number}
-                    </div>
-                  )}
-                </div>
-                <p className="text-sm text-ios-gray-800 whitespace-pre-wrap">{note.note}</p>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-ios-gray-500 text-sm">
-              Sin notas de evolución todavía
             </div>
           )}
         </div>

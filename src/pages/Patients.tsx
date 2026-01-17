@@ -255,7 +255,13 @@ const Patients = () => {
                     >
                       <FileText className="h-4 w-4 text-ios-green" />
                     </button>
-
+                    <button
+                      onClick={() => navigate(`/patient/${patient.id}/evolution`)}
+                      className="h-10 w-10 rounded-xl bg-ios-blue/10 flex items-center justify-center hover:bg-ios-blue/20 transition-colors touch-feedback"
+                      title="Notas de Evolución"
+                    >
+                      <ClipboardList className="h-4 w-4 text-ios-blue" />
+                    </button>
                     <button
                       onClick={() => navigate(`/patient/${patient.id}/intake`)}
                       className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"
