@@ -788,6 +788,7 @@ const Agenda = () => {
                             setSelectedPatientId(apt.patient_id || '');
                             setSelectedDoctorId(apt.doctor_id || '');
                             setSelectedTreatmentId(apt.treatment_type || '');
+                            setFormLocationId(apt.location_id || '');
                             setStatus(apt.status);
                           } else {
                             setEventTitle(apt.title);
@@ -1029,6 +1030,7 @@ const Agenda = () => {
                                   setSelectedPatientId(apt.patient_id || '');
                                   setSelectedDoctorId(apt.doctor_id || '');
                                   setSelectedTreatmentId(apt.treatment_type || '');
+                                  setFormLocationId(apt.location_id || '');
                                   setStatus(apt.status);
                                 } else {
                                   setEventTitle(apt.title);
@@ -1258,6 +1260,23 @@ const Agenda = () => {
                         {doctors.map((doctor) => (
                           <SelectItem key={doctor.id} value={doctor.id}>
                             {doctor.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location for medical appointments */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-ios-gray-600">Sede *</Label>
+                    <Select value={formLocationId} onValueChange={setFormLocationId}>
+                      <SelectTrigger className="ios-input">
+                        <SelectValue placeholder="Selecciona sede..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {locations.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
