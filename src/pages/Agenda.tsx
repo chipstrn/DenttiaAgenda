@@ -497,6 +497,16 @@ const Agenda = () => {
     ).slice(0, 10);
   }, [patients, patientSearch]);
 
+  // Form validation - disable submit if required fields are empty
+  const isFormValid = useMemo(() => {
+    if (appointmentType === 'medical') {
+      return !!(selectedPatientId && selectedDoctorId && formLocationId && title);
+    } else {
+      // Personal event requires doctor, location, and title
+      return !!(selectedDoctorId && formLocationId && eventTitle);
+    }
+  }, [appointmentType, selectedPatientId, selectedDoctorId, formLocationId, title, eventTitle]);
+
   const getStatusStyle = (statusValue: string) => {
     switch (statusValue) {
       case 'confirmed': return 'bg-ios-green/15 text-ios-green';
@@ -1504,7 +1514,7 @@ const Agenda = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || !isFormValid}
                   className="flex-1 h-12 rounded-xl bg-ios-blue text-white font-semibold hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {saving ? (
