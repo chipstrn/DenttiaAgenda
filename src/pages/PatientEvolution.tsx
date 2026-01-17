@@ -20,8 +20,6 @@ interface EvolutionNote {
     note: string;
     note_date: string;
     created_at: string;
-    tooth_number?: number;
-    tooth_condition?: string;
     profiles?: {
         first_name: string;
         last_name: string;
@@ -132,10 +130,6 @@ const PatientEvolution = () => {
 
         setSavingTooth(true);
         try {
-            // Get previous condition for comparison
-            const previousCondition = teeth[selectedTooth]?.condition || 'healthy';
-            const conditionChanged = previousCondition !== toothCondition;
-
             // Check if tooth exists
             const { data: existing } = await supabase
                 .from('odontograms')
@@ -172,31 +166,6 @@ const PatientEvolution = () => {
                 if (error) throw error;
             }
 
-            // Auto-create evolution note when condition changes or notes are added
-            if (conditionChanged || toothNotes.trim()) {
-                const conditionLabel = CONDITION_LABELS[toothCondition as keyof typeof CONDITION_LABELS] || toothCondition;
-                const previousLabel = CONDITION_LABELS[previousCondition as keyof typeof CONDITION_LABELS] || previousCondition;
-
-                let noteText = `Diente #${selectedTooth}: `;
-                if (conditionChanged) {
-                    noteText += `Cambio de estado: ${previousLabel} → ${conditionLabel}`;
-                }
-                if (toothNotes.trim()) {
-                    noteText += conditionChanged ? `. Observación: ${toothNotes}` : `Observación: ${toothNotes}`;
-                }
-
-                await supabase
-                    .from('evolution_notes')
-                    .insert({
-                        patient_id: patientId,
-                        user_id: user.id,
-                        note: noteText,
-                        tooth_number: selectedTooth,
-                        tooth_condition: toothCondition,
-                        note_date: new Date().toISOString()
-                    });
-            }
-
             // Update local state
             setTeeth(prev => ({
                 ...prev,
@@ -210,8 +179,6 @@ const PatientEvolution = () => {
 
             toast.success(`Diente ${selectedTooth} actualizado`);
             setSelectedTooth(null);
-            setToothNotes(''); // Clear notes after save
-            fetchData(); // Refresh to show new evolution note
         } catch (error) {
             console.error('Error saving tooth:', error);
             toast.error('Error al guardar');
@@ -444,36 +411,22 @@ const PatientEvolution = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            {/* Tooth badge if linked to a tooth */}
-                                            {note.tooth_number && (
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-ios-blue/10 text-ios-blue rounded-full text-xs font-medium">
-                                                    <span>🦷</span>
-                                                    #{note.tooth_number}
-                                                </div>
-                                            )}
-                                            {user?.id === note.user_id && (
-                                                <button
-                                                    onClick={() => handleDeleteNote(note.id)}
-                                                    disabled={deleting === note.id}
-                                                    className="text-ios-gray-400 hover:text-ios-red transition-colors p-2"
-                                                    title="Eliminar nota"
-                                                >
-                                                    {deleting === note.id ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <Trash2 className="h-4 w-4" />
-                                                    )}
-                                                </button>
-                                            )}
-                                        </div>
+                                        {user?.id === note.user_id && (
+                                            <button
+                                                onClick={() => handleDeleteNote(note.id)}
+                                                disabled={deleting === note.id}
+                                                className="text-ios-gray-400 hover:text-ios-red transition-colors p-2"
+                                                title="Eliminar nota"
+                                            >
+                                                {deleting === note.id ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
-                                    <div className={cn(
-                                        "rounded-xl p-4 whitespace-pre-wrap text-sm leading-relaxed",
-                                        note.tooth_number
-                                            ? "bg-ios-blue/5 border border-ios-blue/20 text-ios-gray-800"
-                                            : "bg-ios-gray-50 text-ios-gray-800"
-                                    )}>
+                                    <div className="bg-ios-gray-50 rounded-xl p-4 text-ios-gray-800 whitespace-pre-wrap text-sm leading-relaxed">
                                         {note.note}
                                     </div>
                                 </div>
