@@ -534,7 +534,13 @@ const Agenda = () => {
           </Select>
 
           <button
-            onClick={() => setIsDialogOpen(true)}
+            onClick={() => {
+              // Pre-fill location if viewing a specific location
+              if (selectedLocation !== 'all') {
+                setFormLocationId(selectedLocation);
+              }
+              setIsDialogOpen(true);
+            }}
             className="flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback"
           >
             <Plus className="h-5 w-5" />
@@ -887,7 +893,12 @@ const Agenda = () => {
                     No hay citas para {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
                   </p>
                   <button
-                    onClick={() => setIsDialogOpen(true)}
+                    onClick={() => {
+                      if (selectedLocation !== 'all') {
+                        setFormLocationId(selectedLocation);
+                      }
+                      setIsDialogOpen(true);
+                    }}
                     className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-lg shadow-ios-blue/30"
                   >
                     <Plus className="h-4 w-4" />
@@ -929,6 +940,10 @@ const Agenda = () => {
                               setStartTime(clickedTime);
                               setEndTime(clickedEndTime);
                               setAppointmentDate(format(selectedDate, 'yyyy-MM-dd'));
+                              // Pre-fill location
+                              if (selectedLocation !== 'all') {
+                                setFormLocationId(selectedLocation);
+                              }
                               setIsDialogOpen(true);
                             }}
                           >
