@@ -4,14 +4,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useParams } from 'react-router-dom';
-import { ChevronRight, Save, Plus, Trash2, FileText, User, Calendar, Loader2, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { ChevronRight, Plus, Save, FileText, Trash2, Loader2, Calendar, User, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
-import Odontogram, { CONDITION_LABELS } from '@/components/dental/Odontogram';
+import { toast } from 'sonner';
+import { useParams, useNavigate } from 'react-router-dom';
+import { CONDITION_LABELS } from '@/components/dental/Odontogram';
 
 interface EvolutionNote {
     id: string;
@@ -20,28 +20,17 @@ interface EvolutionNote {
     note: string;
     note_date: string;
     created_at: string;
+    tooth_number?: number;
+    tooth_condition?: string;
     profiles?: {
         first_name: string;
         last_name: string;
     };
 }
 
-interface ToothData {
-    tooth_number: number;
-    condition: string;
-    surfaces: {
-        mesial?: string;
-        distal?: string;
-        oclusal?: string;
-        vestibular?: string;
-        lingual?: string;
-    };
-    notes?: string;
-    treatment_needed?: string;
-}
-
 const PatientEvolution = () => {
     const { patientId } = useParams();
+    const navigate = useNavigate();
     const { user } = useAuth();
 
     const [loading, setLoading] = useState(true);
@@ -50,13 +39,6 @@ const PatientEvolution = () => {
     const [newNote, setNewNote] = useState('');
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
-
-    // Odontogram state
-    const [teeth, setTeeth] = useState<Record<number, ToothData>>({});
-    const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
-    const [toothCondition, setToothCondition] = useState('healthy');
-    const [toothNotes, setToothNotes] = useState('');
-    const [savingTooth, setSavingTooth] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!patientId) return;
@@ -85,27 +67,6 @@ const PatientEvolution = () => {
 
             if (notesError) throw notesError;
             setNotes(notesData || []);
-
-            // Fetch odontogram data
-            const { data: odontogramData, error: odontogramError } = await supabase
-                .from('odontograms')
-                .select('*')
-                .eq('patient_id', patientId);
-
-            if (odontogramError) throw odontogramError;
-
-            // Convert to teeth record format
-            const teethRecord: Record<number, ToothData> = {};
-            odontogramData?.forEach(tooth => {
-                teethRecord[tooth.tooth_number] = {
-                    tooth_number: tooth.tooth_number,
-                    condition: tooth.condition || 'healthy',
-                    surfaces: tooth.surfaces || {},
-                    notes: tooth.notes || '',
-                    treatment_needed: tooth.treatment_needed || ''
-                };
-            });
-            setTeeth(teethRecord);
         } catch (error) {
             console.error('Error fetching evolution notes:', error);
             toast.error('Error al cargar datos');
@@ -117,75 +78,6 @@ const PatientEvolution = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
-
-    const handleToothClick = (toothNumber: number) => {
-        setSelectedTooth(toothNumber);
-        const toothData = teeth[toothNumber];
-        setToothCondition(toothData?.condition || 'healthy');
-        setToothNotes(toothData?.notes || '');
-    };
-
-    const handleSaveTooth = async () => {
-        if (!selectedTooth || !user) return;
-
-        setSavingTooth(true);
-        try {
-            // Check if tooth exists
-            const { data: existing } = await supabase
-                .from('odontograms')
-                .select('id')
-                .eq('patient_id', patientId)
-                .eq('tooth_number', selectedTooth)
-                .single();
-
-            if (existing) {
-                // Update
-                const { error } = await supabase
-                    .from('odontograms')
-                    .update({
-                        condition: toothCondition,
-                        notes: toothNotes,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', existing.id);
-
-                if (error) throw error;
-            } else {
-                // Insert
-                const { error } = await supabase
-                    .from('odontograms')
-                    .insert({
-                        patient_id: patientId,
-                        user_id: user.id,
-                        tooth_number: selectedTooth,
-                        condition: toothCondition,
-                        notes: toothNotes,
-                        surfaces: {}
-                    });
-
-                if (error) throw error;
-            }
-
-            // Update local state
-            setTeeth(prev => ({
-                ...prev,
-                [selectedTooth]: {
-                    tooth_number: selectedTooth,
-                    condition: toothCondition,
-                    surfaces: teeth[selectedTooth]?.surfaces || {},
-                    notes: toothNotes
-                }
-            }));
-
-            toast.success(`Diente ${selectedTooth} actualizado`);
-            setSelectedTooth(null);
-        } catch (error) {
-            console.error('Error saving tooth:', error);
-            toast.error('Error al guardar');
-        } finally {
-            setSavingTooth(false);
-        }
-    };
 
     const handleSaveNote = async () => {
         if (!newNote.trim()) {
@@ -223,8 +115,6 @@ const PatientEvolution = () => {
     };
 
     const handleDeleteNote = async (id: string) => {
-        if (!confirm('¿Estás seguro de eliminar esta nota?')) return;
-
         setDeleting(id);
         try {
             const { error } = await supabase
@@ -234,11 +124,11 @@ const PatientEvolution = () => {
 
             if (error) throw error;
 
-            setNotes(prev => prev.filter(n => n.id !== id));
             toast.success('Nota eliminada');
+            setNotes(prev => prev.filter(n => n.id !== id));
         } catch (error) {
             console.error('Error deleting note:', error);
-            toast.error('Error al eliminar nota');
+            toast.error('Error al eliminar la nota');
         } finally {
             setDeleting(null);
         }
@@ -264,90 +154,20 @@ const PatientEvolution = () => {
                 </div>
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Historial Clínico</h1>
+                        <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Historial de Evolución</h1>
                         <p className="text-ios-gray-500 mt-1 font-medium">
                             Paciente: <span className="text-ios-gray-900">{patientName}</span>
                         </p>
                     </div>
+                    <button
+                        onClick={() => navigate(`/patient/${patientId}/exam`)}
+                        className="flex items-center gap-2 px-4 py-2 bg-ios-blue/10 text-ios-blue rounded-xl font-medium hover:bg-ios-blue/20 transition-colors"
+                    >
+                        <ExternalLink className="h-4 w-4" />
+                        Ver Odontograma
+                    </button>
                 </div>
             </div>
-
-            {/* Odontogram Section */}
-            <div className="ios-card p-6 mb-6 animate-slide-up">
-                <h2 className="text-lg font-bold text-ios-gray-900 mb-4">Odontograma</h2>
-                <p className="text-sm text-ios-gray-500 mb-6">Haz clic en un diente para editar su estado</p>
-
-                <Odontogram
-                    teeth={teeth}
-                    onToothClick={handleToothClick}
-                    selectedTooth={selectedTooth}
-                />
-            </div>
-
-            {/* Tooth Editor Panel */}
-            {selectedTooth && (
-                <div className="ios-card p-6 mb-6 animate-scale-in border-2 border-ios-blue">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-ios-gray-900">
-                            Diente #{selectedTooth}
-                        </h3>
-                        <button
-                            onClick={() => setSelectedTooth(null)}
-                            className="p-2 hover:bg-ios-gray-100 rounded-xl transition-colors"
-                        >
-                            <X className="h-5 w-5 text-ios-gray-500" />
-                        </button>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div>
-                            <Label className="text-sm font-medium text-ios-gray-600 mb-2 block">Condición</Label>
-                            <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                                {Object.entries(CONDITION_LABELS).map(([key, label]) => (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        onClick={() => setToothCondition(key)}
-                                        className={cn(
-                                            "px-3 py-2 rounded-xl text-sm font-medium transition-all touch-feedback",
-                                            toothCondition === key
-                                                ? "bg-ios-blue text-white"
-                                                : "bg-ios-gray-100 text-ios-gray-700 hover:bg-ios-gray-200"
-                                        )}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <Label className="text-sm font-medium text-ios-gray-600 mb-2 block">Notas del diente</Label>
-                            <textarea
-                                value={toothNotes}
-                                onChange={(e) => setToothNotes(e.target.value)}
-                                className="ios-input min-h-[80px] resize-none"
-                                placeholder="Observaciones específicas de este diente..."
-                            />
-                        </div>
-
-                        <button
-                            onClick={handleSaveTooth}
-                            disabled={savingTooth}
-                            className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
-                        >
-                            {savingTooth ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                                <>
-                                    <Save className="h-5 w-5" />
-                                    Guardar Diente
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* New Note Form */}
@@ -369,7 +189,7 @@ const PatientEvolution = () => {
                             </div>
                             <button
                                 onClick={handleSaveNote}
-                                disabled={saving}
+                                disabled={saving || !newNote.trim()}
                                 className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
                             >
                                 {saving ? (
@@ -393,7 +213,10 @@ const PatientEvolution = () => {
                             notes.map((note, index) => (
                                 <div
                                     key={note.id}
-                                    className="ios-card p-6 flex flex-col gap-4 animate-fade-in"
+                                    className={cn(
+                                        "ios-card p-6 flex flex-col gap-4 animate-fade-in",
+                                        note.tooth_number && "border-l-4 border-ios-blue"
+                                    )}
                                     style={{ animationDelay: `${200 + index * 50}ms` }}
                                 >
                                     <div className="flex items-start justify-between">
@@ -411,22 +234,39 @@ const PatientEvolution = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        {user?.id === note.user_id && (
-                                            <button
-                                                onClick={() => handleDeleteNote(note.id)}
-                                                disabled={deleting === note.id}
-                                                className="text-ios-gray-400 hover:text-ios-red transition-colors p-2"
-                                                title="Eliminar nota"
-                                            >
-                                                {deleting === note.id ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <Trash2 className="h-4 w-4" />
-                                                )}
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {note.tooth_number && (
+                                                <div className="flex items-center gap-1 px-2.5 py-1 bg-ios-blue/10 text-ios-blue rounded-full text-xs font-medium">
+                                                    🦷 #{note.tooth_number}
+                                                    {note.tooth_condition && (
+                                                        <span className="text-ios-gray-500">
+                                                            • {CONDITION_LABELS[note.tooth_condition as keyof typeof CONDITION_LABELS] || note.tooth_condition}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {user?.id === note.user_id && (
+                                                <button
+                                                    onClick={() => handleDeleteNote(note.id)}
+                                                    disabled={deleting === note.id}
+                                                    className="text-ios-gray-400 hover:text-ios-red transition-colors p-2"
+                                                    title="Eliminar nota"
+                                                >
+                                                    {deleting === note.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4" />
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="bg-ios-gray-50 rounded-xl p-4 text-ios-gray-800 whitespace-pre-wrap text-sm leading-relaxed">
+                                    <div className={cn(
+                                        "rounded-xl p-4 whitespace-pre-wrap text-sm leading-relaxed",
+                                        note.tooth_number
+                                            ? "bg-ios-blue/5 text-ios-gray-800"
+                                            : "bg-ios-gray-50 text-ios-gray-800"
+                                    )}>
                                         {note.note}
                                     </div>
                                 </div>
