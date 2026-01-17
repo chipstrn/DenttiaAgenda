@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope, Loader2, ClipboardList } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, User, Phone, Mail, FileText, CheckCircle, Clock, Stethoscope, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -255,13 +255,7 @@ const Patients = () => {
                     >
                       <FileText className="h-4 w-4 text-ios-green" />
                     </button>
-                    <button
-                      onClick={() => navigate(`/patient/${patient.id}/evolution`)}
-                      className="h-10 w-10 rounded-xl bg-ios-blue/10 flex items-center justify-center hover:bg-ios-blue/20 transition-colors touch-feedback"
-                      title="Notas de Evolución"
-                    >
-                      <ClipboardList className="h-4 w-4 text-ios-blue" />
-                    </button>
+
                     <button
                       onClick={() => navigate(`/patient/${patient.id}/intake`)}
                       className="h-10 w-10 rounded-xl bg-ios-gray-100 flex items-center justify-center hover:bg-ios-gray-200 transition-colors touch-feedback"

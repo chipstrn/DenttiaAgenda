@@ -10,7 +10,7 @@ import Patients from "./pages/Patients";
 import PatientIntake from "./pages/PatientIntake";
 import PatientAnamnesis from "./pages/PatientAnamnesis";
 import PatientExam from "./pages/PatientExam";
-import PatientEvolution from "./pages/PatientEvolution";
+
 import Agenda from "./pages/Agenda";
 import Treatments from "./pages/Treatments";
 import Doctors from "./pages/Doctors";
@@ -87,12 +87,6 @@ const App = () => (
             <Route path="/patient/:patientId/exam" element={
               <ProtectedRoute>
                 <PatientExam />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/patient/:patientId/evolution" element={
-              <ProtectedRoute>
-                <PatientEvolution />
               </ProtectedRoute>
             } />
 
