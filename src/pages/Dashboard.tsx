@@ -143,7 +143,7 @@ const Dashboard = () => {
           .select('id', { count: 'exact', head: true }),
         supabase
           .from('appointments')
-          .select('*, patients(first_name, last_name)')
+          .select('*, patients(first_name, last_name), doctors(full_name)')
           .gte('start_time', dayStart)
           .lte('start_time', dayEnd)
           .order('start_time', { ascending: true }),
@@ -273,7 +273,10 @@ const Dashboard = () => {
                   <AppointmentItem
                     key={apt.id}
                     time={format(new Date(apt.start_time), 'HH:mm')}
-                    patient={`${apt.patients?.first_name} ${apt.patients?.last_name}`}
+                    patient={apt.type === 'personal'
+                      ? apt.doctors?.full_name || 'Doctor bloqueado'
+                      : `${apt.patients?.first_name || ''} ${apt.patients?.last_name || ''}`
+                    }
                     treatment={apt.title}
                     status={apt.status}
                     delay={250 + (i * 50)}
