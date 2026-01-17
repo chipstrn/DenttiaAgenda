@@ -25,7 +25,12 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-const Sidebar = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut, isAdmin, isRecepcion } = useAuth();
@@ -90,6 +95,7 @@ const Sidebar = () => {
     return (
       <Link
         to={item.path}
+        onClick={onClose} // Close sidebar on click (mobile)
         className="block"
       >
         <div
@@ -119,131 +125,149 @@ const Sidebar = () => {
         </div>
       </Link>
     );
-  }, [location.pathname]);
+  }, [location.pathname, onClose]);
 
   return (
-    <div className="h-screen w-72 bg-ios-gray-50 flex flex-col fixed left-0 top-0 border-r border-ios-gray-200/50">
-      {/* Logo */}
-      <div className="p-6 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center shadow-ios-sm">
-            <Activity className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-ios-gray-900 tracking-tight">
-              Denttia
-            </h1>
-            <p className="text-xs text-ios-gray-500 font-medium">ERP Dental</p>
-          </div>
-        </div>
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden animate-fade-in"
+          onClick={onClose}
+        />
+      )}
 
-      {/* User Info */}
-      <div className="px-3 pb-4">
-        <div className="p-3 rounded-xl bg-white/60">
-          <p className="text-sm font-medium text-ios-gray-900 truncate">{userName}</p>
-          <p className={cn(
-            "text-xs font-medium mt-0.5",
-            isAdmin ? 'text-ios-red' : isRecepcion ? 'text-ios-blue' : 'text-ios-green'
-          )}>
-            {isAdmin ? 'Administrador' : isRecepcion ? 'Recepción' : 'Doctor'}
-          </p>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 overflow-y-auto">
-        {/* Main */}
-        <div className="mb-6">
-          <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-            Principal
-          </p>
-          <div className="space-y-1">
-            {mainMenuItems.map((item) => (
-              <MenuItem key={item.path} item={item} />
-            ))}
+      {/* Sidebar Container */}
+      <aside className={cn(
+        "h-screen w-72 bg-ios-gray-50 flex flex-col border-r border-ios-gray-200/50",
+        "fixed left-0 top-0 z-50 transition-transform duration-300 ease-ios",
+        // Desktop: Always visible
+        "md:translate-x-0",
+        // Mobile: Conditional translation
+        !isOpen && "-translate-x-full md:translate-x-0"
+      )}>
+        {/* Logo */}
+        <div className="p-6 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-ios-blue to-ios-indigo flex items-center justify-center shadow-ios-sm">
+              <Activity className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-ios-gray-900 tracking-tight">
+                Denttia
+              </h1>
+              <p className="text-xs text-ios-gray-500 font-medium">ERP Dental</p>
+            </div>
           </div>
         </div>
 
-        {/* Clinical - Solo para doctores y admin */}
-        {(userRole === 'doctor' || isAdmin) && (
+        {/* User Info */}
+        <div className="px-3 pb-4">
+          <div className="p-3 rounded-xl bg-white/60">
+            <p className="text-sm font-medium text-ios-gray-900 truncate">{userName}</p>
+            <p className={cn(
+              "text-xs font-medium mt-0.5",
+              isAdmin ? 'text-ios-red' : isRecepcion ? 'text-ios-blue' : 'text-ios-green'
+            )}>
+              {isAdmin ? 'Administrador' : isRecepcion ? 'Recepción' : 'Doctor'}
+            </p>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-2 overflow-y-auto">
+          {/* Main */}
           <div className="mb-6">
             <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-              Clínico
+              Principal
             </p>
             <div className="space-y-1">
-              {clinicalMenuItems.map((item) => (
+              {mainMenuItems.map((item) => (
                 <MenuItem key={item.path} item={item} />
               ))}
             </div>
           </div>
-        )}
 
-        {/* Reception - Solo para recepción */}
-        {(isRecepcion || isAdmin) && (
+          {/* Clinical - Solo para doctores y admin */}
+          {(userRole === 'doctor' || isAdmin) && (
+            <div className="mb-6">
+              <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+                Clínico
+              </p>
+              <div className="space-y-1">
+                {clinicalMenuItems.map((item) => (
+                  <MenuItem key={item.path} item={item} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reception - Solo para recepción */}
+          {(isRecepcion || isAdmin) && (
+            <div className="mb-6">
+              <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+                Caja
+              </p>
+              <div className="space-y-1">
+                {receptionMenuItems.map((item) => (
+                  <MenuItem key={item.path} item={item} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Inventory Section */}
           <div className="mb-6">
             <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-              Caja
+              Inventario
             </p>
             <div className="space-y-1">
-              {receptionMenuItems.map((item) => (
+              {inventoryMenuItems.map((item) => (
                 <MenuItem key={item.path} item={item} />
               ))}
             </div>
           </div>
-        )}
 
-        {/* Inventory Section */}
-        <div className="mb-6">
-          <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-            Inventario
-          </p>
-          <div className="space-y-1">
-            {inventoryMenuItems.map((item) => (
-              <MenuItem key={item.path} item={item} />
-            ))}
-          </div>
+          {/* Admin Section */}
+          {isAdmin && (
+            <div className="mb-6">
+              <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
+                Administración
+              </p>
+              <div className="space-y-1">
+                {adminMenuItems.map((item) => (
+                  <MenuItem key={item.path} item={item} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Settings for non-admin */}
+          {!isAdmin && (
+            <div className="mb-6">
+              <div className="space-y-1">
+                <MenuItem item={{ icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' }} />
+              </div>
+            </div>
+          )}
+        </nav>
+
+        {/* Logout */}
+        <div className="p-3 border-t border-ios-gray-200/50">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 ease-ios hover:bg-ios-red/10 touch-feedback group"
+          >
+            <div className="h-8 w-8 rounded-lg bg-ios-red/15 flex items-center justify-center group-hover:bg-ios-red/20 transition-colors">
+              <LogOut className="h-4 w-4 text-ios-red" />
+            </div>
+            <span className="text-sm font-medium text-ios-red">
+              Cerrar Sesión
+            </span>
+          </button>
         </div>
-
-        {/* Admin Section */}
-        {isAdmin && (
-          <div className="mb-6">
-            <p className="px-3 mb-2 text-xs font-semibold text-ios-gray-400 uppercase tracking-wider">
-              Administración
-            </p>
-            <div className="space-y-1">
-              {adminMenuItems.map((item) => (
-                <MenuItem key={item.path} item={item} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Settings for non-admin */}
-        {!isAdmin && (
-          <div className="mb-6">
-            <div className="space-y-1">
-              <MenuItem item={{ icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' }} />
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* Logout */}
-      <div className="p-3 border-t border-ios-gray-200/50">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 ease-ios hover:bg-ios-red/10 touch-feedback group"
-        >
-          <div className="h-8 w-8 rounded-lg bg-ios-red/15 flex items-center justify-center group-hover:bg-ios-red/20 transition-colors">
-            <LogOut className="h-4 w-4 text-ios-red" />
-          </div>
-          <span className="text-sm font-medium text-ios-red">
-            Cerrar Sesión
-          </span>
-        </button>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 };
 

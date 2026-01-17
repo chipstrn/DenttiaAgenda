@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Sidebar from './Sidebar';
-import { Bell, Plus } from 'lucide-react';
+import { Bell, Plus, Menu } from 'lucide-react';
 import GlobalSearch from './GlobalSearch';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const { profile, user, signOut } = useAuth();
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -58,18 +59,27 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-ios-gray-100">
-      <Sidebar />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className="pl-72 flex flex-col min-h-screen">
+      <div className="pl-0 md:pl-72 flex flex-col min-h-screen transition-all duration-300">
         {/* Glass Header */}
         <header className={cn(
-          "h-16 px-8 flex items-center justify-between sticky top-0 z-20 transition-all duration-300 ease-ios",
+          "h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-20 transition-all duration-300 ease-ios",
           scrolled
             ? "glass border-b border-white/20 shadow-glass"
             : "bg-transparent"
         )}>
-          {/* Search */}
-          <GlobalSearch />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 text-ios-gray-600 hover:bg-black/5 rounded-lg transition-colors"
+              aria-label="Abrir menú"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            {/* Search */}
+            <GlobalSearch />
+          </div>
 
           {/* Right Actions */}
           <div className="flex items-center gap-3">
