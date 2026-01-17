@@ -138,6 +138,7 @@ const Agenda = () => {
   // Personal event states
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [formLocationId, setFormLocationId] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -221,6 +222,7 @@ const Agenda = () => {
     setQuickPhone('');
     setEventTitle('');
     setEventDescription('');
+    setFormLocationId('');
     setAppointmentType('medical');
     setEditingAppointmentId(null);
   }, []);
@@ -294,7 +296,7 @@ const Agenda = () => {
         status: appointmentType === 'medical' ? status : 'confirmed',
         treatment_type: appointmentType === 'medical' ? selectedTreatmentId : null,
         type: appointmentType,
-        location_id: selectedLocation !== 'all' ? selectedLocation : null,
+        location_id: formLocationId || (selectedLocation !== 'all' ? selectedLocation : null),
         patient_data_status: 'complete',
         doctor_id: selectedDoctorId || null
       };
@@ -791,6 +793,7 @@ const Agenda = () => {
                             setEventTitle(apt.title);
                             setEventDescription(apt.description || '');
                             setSelectedDoctorId(apt.doctor_id || '');
+                            setFormLocationId(apt.location_id || '');
                           }
                           setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
                           setStartTime(format(new Date(apt.start_time), 'HH:mm'));
@@ -1031,6 +1034,7 @@ const Agenda = () => {
                                   setEventTitle(apt.title);
                                   setEventDescription(apt.description || '');
                                   setSelectedDoctorId(apt.doctor_id || '');
+                                  setFormLocationId(apt.location_id || '');
                                 }
                                 setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
                                 setStartTime(format(new Date(apt.start_time), 'HH:mm'));
@@ -1356,6 +1360,23 @@ const Agenda = () => {
                               />
                               {doc.full_name}
                             </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location selector for personal events */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-ios-gray-600">Sede *</Label>
+                    <Select value={formLocationId} onValueChange={setFormLocationId}>
+                      <SelectTrigger className="ios-input">
+                        <SelectValue placeholder="Selecciona sede..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {locations.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
