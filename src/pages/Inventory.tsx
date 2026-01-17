@@ -47,15 +47,15 @@ const Inventory = () => {
     const [newItem, setNewItem] = useState({
         name: '',
         sku: '',
-        min_stock: 5,
+        min_stock: '5',
         unit: 'piezas',
-        cost: 0,
-        current_stock: 0
+        cost: '0',
+        current_stock: '0'
     });
 
     const [adjustment, setAdjustment] = useState({
         type: 'IN', // IN, OUT
-        quantity: 1,
+        quantity: '1',
         notes: ''
     });
 
@@ -87,17 +87,17 @@ const Inventory = () => {
             const { error } = await supabase.from('inventory_items').insert([{
                 name: newItem.name,
                 sku: newItem.sku,
-                current_stock: newItem.current_stock,
-                min_stock: newItem.min_stock,
+                current_stock: parseFloat(newItem.current_stock) || 0,
+                min_stock: parseFloat(newItem.min_stock) || 0,
                 unit: newItem.unit,
-                cost: newItem.cost
+                cost: parseFloat(newItem.cost) || 0
             }]);
 
             if (error) throw error;
 
             toast.success('Producto creado');
             setIsAddOpen(false);
-            setNewItem({ name: '', sku: '', min_stock: 5, unit: 'piezas', cost: 0, current_stock: 0 });
+            setNewItem({ name: '', sku: '', min_stock: '5', unit: 'piezas', cost: '0', current_stock: '0' });
             fetchItems();
         } catch (error) {
             console.error('Error creating item:', error);
@@ -121,9 +121,10 @@ const Inventory = () => {
             if (txError) throw txError;
 
             // 2. Update stock
+            const qty = parseFloat(adjustment.quantity) || 0;
             const newStock = adjustment.type === 'IN'
-                ? selectedItem.current_stock + parseInt(adjustment.quantity.toString())
-                : selectedItem.current_stock - parseInt(adjustment.quantity.toString());
+                ? selectedItem.current_stock + qty
+                : selectedItem.current_stock - qty;
 
             const { error: updateError } = await supabase
                 .from('inventory_items')
@@ -134,7 +135,7 @@ const Inventory = () => {
 
             toast.success('Stock actualizado');
             setIsAdjustOpen(false);
-            setAdjustment({ type: 'IN', quantity: 1, notes: '' });
+            setAdjustment({ type: 'IN', quantity: '1', notes: '' });
             setSelectedItem(null);
             fetchItems();
         } catch (error) {
@@ -289,7 +290,7 @@ const Inventory = () => {
                                 <Input
                                     type="number"
                                     value={newItem.current_stock}
-                                    onChange={(e) => setNewItem({ ...newItem, current_stock: parseInt(e.target.value) || 0 })}
+                                    onChange={(e) => setNewItem({ ...newItem, current_stock: e.target.value })}
                                 />
                             </div>
                             <div className="grid gap-2">
@@ -297,7 +298,7 @@ const Inventory = () => {
                                 <Input
                                     type="number"
                                     value={newItem.min_stock}
-                                    onChange={(e) => setNewItem({ ...newItem, min_stock: parseInt(e.target.value) || 0 })}
+                                    onChange={(e) => setNewItem({ ...newItem, min_stock: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -319,12 +320,13 @@ const Inventory = () => {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                            <Label>Cantiad</Label>
+                            <Label>Cantidad</Label>
                             <Input
                                 type="number"
-                                min="1"
+                                min="0" // Allow decimals
+                                step="any"
                                 value={adjustment.quantity}
-                                onChange={(e) => setAdjustment({ ...adjustment, quantity: parseInt(e.target.value) || 1 })}
+                                onChange={(e) => setAdjustment({ ...adjustment, quantity: e.target.value })}
                             />
                         </div>
                         <div className="grid gap-2">
