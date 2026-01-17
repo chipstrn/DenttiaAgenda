@@ -26,8 +26,14 @@ import {
   Trash2,
   DollarSign,
   Check,
-  Loader2
+  Check,
+  Loader2,
+  Calendar,
+  User,
+  Clock
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useParams } from 'react-router-dom';
 
@@ -58,6 +64,19 @@ interface BudgetItem {
   total: number;
 }
 
+interface ClinicalNote {
+  id: string;
+  patient_id: string;
+  user_id: string | null;
+  note: string;
+  note_date: string;
+  created_at: string;
+  profiles?: {
+    first_name: string;
+    last_name: string;
+  };
+}
+
 const CONDITIONS = [
   'healthy', 'caries', 'filling', 'crown', 'root_canal',
   'extraction', 'missing', 'implant', 'bridge'
@@ -78,6 +97,12 @@ const PatientExam = () => {
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [showBudgetDialog, setShowBudgetDialog] = useState(false);
   const [discount, setDiscount] = useState(0);
+
+  // Notes State
+  const [notes, setNotes] = useState<ClinicalNote[]>([]);
+  const [newNote, setNewNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [deletingNote, setDeletingNote] = useState<string | null>(null);
 
   // Form for selected tooth
   const [toothCondition, setToothCondition] = useState('healthy');
@@ -127,7 +152,15 @@ const PatientExam = () => {
           .select('id, name, base_price, category')
           .eq('user_id', user.id)
           .eq('is_active', true)
-          .order('name')
+          .order('name'),
+        supabase
+          .from('clinical_notes')
+          .select(`
+            *,
+            profiles:user_id (first_name, last_name)
+          `)
+          .eq('patient_id', patientId)
+          .order('note_date', { ascending: false })
       ]);
 
       if (patientResult.data) {
@@ -139,8 +172,8 @@ const PatientExam = () => {
         teethMap[tooth.tooth_number] = tooth;
       });
       setTeeth(teethMap);
-
       setTreatments(treatmentsResult.data || []);
+      setNotes(patientResult && treatmentsResult ? (await supabase.from('clinical_notes').select('*, profiles:user_id(first_name, last_name)').eq('patient_id', patientId).order('note_date', { ascending: false })).data || [] : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -264,6 +297,65 @@ const PatientExam = () => {
       toast.error('Error al guardar odontograma');
     } finally {
       setSavingAll(false);
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!newNote.trim()) {
+      toast.error('La nota no puede estar vacía');
+      return;
+    }
+
+    if (!userId || !patientId) return;
+
+    setSavingNote(true);
+    try {
+      const { data, error } = await supabase
+        .from('clinical_notes')
+        .insert({
+          patient_id: patientId,
+          user_id: userId,
+          note: newNote,
+          note_date: new Date().toISOString()
+        })
+        .select(`
+          *,
+          profiles:user_id (first_name, last_name)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      setNotes(prev => [data, ...prev]);
+      setNewNote('');
+      toast.success('Nota guardada');
+    } catch (error) {
+      console.error('Error saving note:', error);
+      toast.error('Error al guardar nota');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta nota?')) return;
+
+    setDeletingNote(id);
+    try {
+      const { error } = await supabase
+        .from('clinical_notes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setNotes(prev => prev.filter(n => n.id !== id));
+      toast.success('Nota eliminada');
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast.error('Error al eliminar nota');
+    } finally {
+      setDeletingNote(null);
     }
   };
 
@@ -443,6 +535,91 @@ const PatientExam = () => {
             onToothClick={handleToothClick}
             selectedTooth={selectedTooth}
           />
+
+          {/* Clinical Notes Section */}
+          <div className="mt-6 border-t border-ios-gray-100 pt-6">
+            <h3 className="text-lg font-bold text-ios-gray-900 mb-4 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-ios-blue" />
+              Notas de Evolución y Detalles
+            </h3>
+
+            <div className="bg-ios-gray-50 rounded-2xl p-4 mb-6">
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-ios-gray-600">Nueva Nota</Label>
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  className="ios-input min-h-[100px] resize-none bg-white"
+                  placeholder="Escribe detalles del tratamiento, evolución o notas para la próxima cita..."
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveNote}
+                    disabled={savingNote}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-ios-blue text-white font-semibold shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback disabled:opacity-50"
+                  >
+                    {savingNote ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Guardar Nota
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {notes.length > 0 ? (
+                notes.map((note) => (
+                  <div key={note.id} className="bg-white border border-ios-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-ios-blue/10 flex items-center justify-center text-ios-blue font-bold text-sm">
+                          {note.profiles?.first_name?.[0]}{note.profiles?.last_name?.[0]}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-ios-gray-900 text-sm">
+                            Dr. {note.profiles?.first_name} {note.profiles?.last_name}
+                          </p>
+                          <div className="flex items-center gap-3 text-xs text-ios-gray-500 mt-0.5">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(note.note_date), "d MMM yyyy", { locale: es })}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {format(new Date(note.note_date), "HH:mm", { locale: es })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {userId === note.user_id && (
+                        <button
+                          onClick={() => handleDeleteNote(note.id)}
+                          disabled={deletingNote === note.id}
+                          className="text-ios-gray-400 hover:text-ios-red transition-colors p-1.5 hover:bg-ios-red/5 rounded-lg"
+                        >
+                          {deletingNote === note.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-ios-gray-700 text-sm leading-relaxed whitespace-pre-wrap pl-[52px]">
+                      {note.note}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-ios-gray-400">
+                  <p className="text-sm">No hay notas registradas</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Tooth Details Panel */}
