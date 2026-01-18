@@ -870,22 +870,24 @@ const Agenda = () => {
                               >
                                 <MessageCircle className="h-4 w-4 text-ios-green" />
                               </button>
-                              <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
-                                <SelectTrigger className={cn("w-full sm:w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", getStatusStyle(apt.status))}>
-                                  {statusOption && <statusOption.icon className="h-3.5 w-3.5 mr-1.5" />}
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl">
-                                  {STATUS_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      <span className={cn("flex items-center gap-2", option.color)}>
-                                        <option.icon className="h-3.5 w-3.5" />
-                                        {option.label}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
+                                  <SelectTrigger className={cn("w-full sm:w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", getStatusStyle(apt.status))}>
+                                    {statusOption && <statusOption.icon className="h-3.5 w-3.5 mr-1.5" />}
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl">
+                                    {STATUS_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        <span className={cn("flex items-center gap-2", option.color)}>
+                                          <option.icon className="h-3.5 w-3.5" />
+                                          {option.label}
+                                        </span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1083,23 +1085,25 @@ const Agenda = () => {
                                     </p>
                                   )}
                                 </div>
-                                <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
-                                  <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
-                                    {STATUS_OPTIONS.find(s => s.value === apt.status) && (
-                                      <div className="h-2 w-2 rounded-full bg-current" />
-                                    )}
-                                  </SelectTrigger>
-                                  <SelectContent className="rounded-xl">
-                                    {STATUS_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        <span className={cn("flex items-center gap-2", option.color)}>
-                                          <option.icon className="h-3 w-3" />
-                                          {option.label}
-                                        </span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
+                                    <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
+                                      {STATUS_OPTIONS.find(s => s.value === apt.status) && (
+                                        <div className="h-2 w-2 rounded-full bg-current" />
+                                      )}
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                      {STATUS_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                          <span className={cn("flex items-center gap-2", option.color)}>
+                                            <option.icon className="h-3 w-3" />
+                                            {option.label}
+                                          </span>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                             </div>
                           );
@@ -1464,7 +1468,23 @@ const Agenda = () => {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-ios-gray-600">Inicio</Label>
-                    <Select value={startTime} onValueChange={setStartTime}>
+                    <Select value={startTime} onValueChange={(value) => {
+                      setStartTime(value);
+                      // Auto-update end time if treatment is selected
+                      if (selectedTreatmentId) {
+                        const treatment = treatments.find(t => t.id === selectedTreatmentId);
+                        if (treatment?.duration_minutes) {
+                          const [hours, minutes] = value.split(':').map(Number);
+                          const startMinutes = hours * 60 + minutes;
+                          const endMinutes = startMinutes + treatment.duration_minutes;
+                          const endHours = Math.floor(endMinutes / 60);
+                          const endMins = endMinutes % 60;
+                          const finalHour = Math.min(endHours, 20);
+                          const finalMin = endHours >= 20 ? 0 : endMins;
+                          setEndTime(`${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`);
+                        }
+                      }
+                    }}>
                       <SelectTrigger className="ios-input text-sm">
                         <SelectValue />
                       </SelectTrigger>
