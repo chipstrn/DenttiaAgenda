@@ -84,7 +84,7 @@ const Login = () => {
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-3xl bg-gradient-to-br from-ios-blue to-ios-indigo shadow-ios-lg mb-4">
             <Activity className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Denttia ERP</h1>
+          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Denttia ERP - Sistema Dental</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">Sistema de Gestión Dental</p>
         </div>
         
