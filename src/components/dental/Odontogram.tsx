@@ -54,31 +54,36 @@ const UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28];
 const LOWER_LEFT = [31, 32, 33, 34, 35, 36, 37, 38];
 const LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
 
-const Tooth = ({ 
-  number, 
-  data, 
-  onClick, 
+const UPPER_RIGHT_DECIDUOUS = [55, 54, 53, 52, 51];
+const UPPER_LEFT_DECIDUOUS = [61, 62, 63, 64, 65];
+const LOWER_LEFT_DECIDUOUS = [71, 72, 73, 74, 75];
+const LOWER_RIGHT_DECIDUOUS = [85, 84, 83, 82, 81];
+
+const Tooth = ({
+  number,
+  data,
+  onClick,
   isSelected,
-  isUpper 
-}: { 
-  number: number; 
-  data?: ToothData; 
+  isUpper
+}: {
+  number: number;
+  data?: ToothData;
   onClick: () => void;
   isSelected: boolean;
   isUpper: boolean;
 }) => {
   const condition = data?.condition || 'healthy';
   const colorClass = CONDITION_COLORS[condition] || CONDITION_COLORS.healthy;
-  
+
   // Determine tooth type for shape
   const toothType = number % 10;
-  const isMolar = toothType >= 6;
-  const isPremolar = toothType >= 4 && toothType <= 5;
-  const isCanine = toothType === 3;
-  const isIncisor = toothType <= 2;
+  const isMolar = toothType >= 6 || (number > 50 && (toothType === 4 || toothType === 5));
+  const isPremolar = (toothType >= 4 && toothType <= 5) && number <= 50; // Deciduous molars look like molars
+  // const isCanine = toothType === 3;
+  // const isIncisor = toothType <= 2;
 
   return (
-    <div 
+    <div
       className={cn(
         "flex flex-col items-center cursor-pointer transition-all duration-200 touch-feedback",
         isSelected && "scale-110"
@@ -88,43 +93,43 @@ const Tooth = ({
       {/* Tooth Number */}
       {isUpper && (
         <span className={cn(
-          "text-xs font-medium mb-1",
+          "text-[10px] font-medium mb-1",
           isSelected ? "text-ios-blue" : "text-ios-gray-500"
         )}>
           {number}
         </span>
       )}
-      
+
       {/* Tooth Shape */}
       <div className={cn(
         "relative transition-all duration-200",
         isSelected && "ring-2 ring-ios-blue ring-offset-2 rounded-lg"
       )}>
-        <svg 
-          width={isMolar ? 36 : isPremolar ? 30 : 24} 
-          height={40} 
+        <svg
+          width={isMolar ? 32 : isPremolar ? 28 : 22}
+          height={36}
           viewBox="0 0 40 50"
           className="drop-shadow-sm"
         >
           {/* Root */}
           <path
-            d={isUpper 
-              ? (isMolar 
-                ? "M10 35 L8 48 M20 35 L20 50 M30 35 L32 48" 
-                : isPremolar 
-                ? "M15 35 L12 48 M25 35 L28 48"
-                : "M20 35 L20 50")
-              : (isMolar 
-                ? "M10 15 L8 2 M20 15 L20 0 M30 15 L32 2" 
-                : isPremolar 
-                ? "M15 15 L12 2 M25 15 L28 2"
-                : "M20 15 L20 0")
+            d={isUpper
+              ? (isMolar
+                ? "M10 35 L8 48 M20 35 L20 50 M30 35 L32 48"
+                : isPremolar
+                  ? "M15 35 L12 48 M25 35 L28 48"
+                  : "M20 35 L20 50")
+              : (isMolar
+                ? "M10 15 L8 2 M20 15 L20 0 M30 15 L32 2"
+                : isPremolar
+                  ? "M15 15 L12 2 M25 15 L28 2"
+                  : "M20 15 L20 0")
             }
             className="stroke-ios-gray-400"
             strokeWidth="2"
             fill="none"
           />
-          
+
           {/* Crown */}
           <rect
             x="5"
@@ -134,7 +139,7 @@ const Tooth = ({
             rx="4"
             className={cn(colorClass, "stroke-2")}
           />
-          
+
           {/* Surface indicators if has specific surface conditions */}
           {data?.surfaces && Object.keys(data.surfaces).length > 0 && (
             <>
@@ -149,7 +154,7 @@ const Tooth = ({
               )}
             </>
           )}
-          
+
           {/* X mark for extraction/missing */}
           {(condition === 'extraction' || condition === 'missing') && (
             <>
@@ -159,11 +164,11 @@ const Tooth = ({
           )}
         </svg>
       </div>
-      
+
       {/* Tooth Number (bottom for lower teeth) */}
       {!isUpper && (
         <span className={cn(
-          "text-xs font-medium mt-1",
+          "text-[10px] font-medium mt-1",
           isSelected ? "text-ios-blue" : "text-ios-gray-500"
         )}>
           {number}
@@ -174,88 +179,112 @@ const Tooth = ({
 };
 
 const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: OdontogramProps) => {
+  const [showMixedDentition, setShowMixedDentition] = useState(false);
+
+  const renderToothRow = (toothArray: number[], isUpper: boolean) => (
+    <div className={cn("flex gap-1", isUpper ? "items-end" : "items-start")}>
+      {toothArray.map(num => (
+        <Tooth
+          key={num}
+          number={num}
+          data={teeth[num]}
+          onClick={() => !readOnly && onToothClick(num)}
+          isSelected={selectedTooth === num}
+          isUpper={isUpper}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <div className="w-full">
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 mb-6 p-4 bg-ios-gray-50 rounded-2xl">
-        {Object.entries(CONDITION_LABELS).map(([key, label]) => (
-          <div key={key} className="flex items-center gap-2">
-            <div className={cn(
-              "w-4 h-4 rounded border-2",
-              CONDITION_COLORS[key]?.replace('fill-', 'bg-').replace('stroke-', 'border-') || 'bg-white border-gray-400'
-            )} />
-            <span className="text-xs text-ios-gray-600">{label}</span>
-          </div>
-        ))}
+      {/* Legend & Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 bg-ios-gray-50 rounded-2xl">
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(CONDITION_LABELS).map(([key, label]) => (
+            <div key={key} className="flex items-center gap-2">
+              <div className={cn(
+                "w-3 h-3 rounded-full border",
+                CONDITION_COLORS[key]?.replace('fill-', 'bg-').replace('stroke-', 'border-') || 'bg-white border-gray-400'
+              )} />
+              <span className="text-[10px] text-ios-gray-600 uppercase tracking-wide">{label}</span>
+            </div>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showMixedDentition}
+            onChange={(e) => setShowMixedDentition(e.target.checked)}
+            className="rounded border-gray-300 text-ios-blue focus:ring-ios-blue"
+          />
+          <span className="text-xs font-medium text-ios-gray-700">Dentición Mixta (Infantil)</span>
+        </label>
       </div>
 
-      {/* Upper Teeth */}
-      <div className="mb-2">
-        <div className="text-xs text-ios-gray-500 text-center mb-2 font-medium">SUPERIOR</div>
-        <div className="flex justify-center gap-1">
-          {/* Upper Right */}
-          <div className="flex gap-1 pr-4 border-r-2 border-ios-gray-300">
-            {UPPER_RIGHT.map(num => (
-              <Tooth
-                key={num}
-                number={num}
-                data={teeth[num]}
-                onClick={() => !readOnly && onToothClick(num)}
-                isSelected={selectedTooth === num}
-                isUpper={true}
-              />
-            ))}
-          </div>
-          {/* Upper Left */}
-          <div className="flex gap-1 pl-4">
-            {UPPER_LEFT.map(num => (
-              <Tooth
-                key={num}
-                number={num}
-                data={teeth[num]}
-                onClick={() => !readOnly && onToothClick(num)}
-                isSelected={selectedTooth === num}
-                isUpper={true}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+      <div className="relative overflow-x-auto pb-4">
+        <div className="min-w-[600px] flex flex-col items-center">
 
-      {/* Divider */}
-      <div className="h-px bg-ios-gray-200 my-4" />
+          {/* Upper Arch */}
+          <div className="mb-4">
+            <div className="text-[10px] text-ios-gray-400 text-center mb-1 font-bold tracking-widest">PERMANENTE SUPERIOR</div>
+            <div className="flex justify-center gap-8">
+              <div className="flex gap-1 pr-2 border-r border-ios-gray-200">
+                {renderToothRow(UPPER_RIGHT, true)}
+              </div>
+              <div className="flex gap-1 pl-2">
+                {renderToothRow(UPPER_LEFT, true)}
+              </div>
+            </div>
+          </div>
 
-      {/* Lower Teeth */}
-      <div>
-        <div className="flex justify-center gap-1">
-          {/* Lower Right */}
-          <div className="flex gap-1 pr-4 border-r-2 border-ios-gray-300">
-            {LOWER_RIGHT.map(num => (
-              <Tooth
-                key={num}
-                number={num}
-                data={teeth[num]}
-                onClick={() => !readOnly && onToothClick(num)}
-                isSelected={selectedTooth === num}
-                isUpper={false}
-              />
-            ))}
+          {/* Deciduous Upper */}
+          {showMixedDentition && (
+            <div className="mb-4 animate-fade-in">
+              <div className="text-[10px] text-ios-blue/70 text-center mb-1 font-bold tracking-widest">TEMPORAL SUPERIOR</div>
+              <div className="flex justify-center gap-8">
+                <div className="flex gap-1 pr-2 border-r border-blue-100">
+                  {renderToothRow(UPPER_RIGHT_DECIDUOUS, true)}
+                </div>
+                <div className="flex gap-1 pl-2">
+                  {renderToothRow(UPPER_LEFT_DECIDUOUS, true)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-ios-gray-200 to-transparent my-2" />
+
+          {/* Deciduous Lower */}
+          {showMixedDentition && (
+            <div className="mt-2 mb-4 animate-fade-in">
+              <div className="flex justify-center gap-8">
+                <div className="flex gap-1 pr-2 border-r border-blue-100">
+                  {renderToothRow(LOWER_RIGHT_DECIDUOUS, false)}
+                </div>
+                <div className="flex gap-1 pl-2">
+                  {renderToothRow(LOWER_LEFT_DECIDUOUS, false)}
+                </div>
+              </div>
+              <div className="text-[10px] text-ios-blue/70 text-center mt-1 font-bold tracking-widest">TEMPORAL INFERIOR</div>
+            </div>
+          )}
+
+          {/* Lower Arch */}
+          <div className="mt-2">
+            <div className="flex justify-center gap-8">
+              <div className="flex gap-1 pr-2 border-r border-ios-gray-200">
+                {renderToothRow(LOWER_RIGHT, false)}
+              </div>
+              <div className="flex gap-1 pl-2">
+                {renderToothRow(LOWER_LEFT, false)}
+              </div>
+            </div>
+            <div className="text-[10px] text-ios-gray-400 text-center mt-1 font-bold tracking-widest">PERMANENTE INFERIOR</div>
           </div>
-          {/* Lower Left */}
-          <div className="flex gap-1 pl-4">
-            {LOWER_LEFT.map(num => (
-              <Tooth
-                key={num}
-                number={num}
-                data={teeth[num]}
-                onClick={() => !readOnly && onToothClick(num)}
-                isSelected={selectedTooth === num}
-                isUpper={false}
-              />
-            ))}
-          </div>
+
         </div>
-        <div className="text-xs text-ios-gray-500 text-center mt-2 font-medium">INFERIOR</div>
       </div>
     </div>
   );

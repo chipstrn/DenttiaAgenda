@@ -17,6 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import BudgetCreator from '@/components/budget/BudgetCreator';
+import BudgetList from '@/components/budget/BudgetList';
 import { supabase } from '@/integrations/supabase/client';
 import {
   ChevronRight,
@@ -25,7 +28,6 @@ import {
   Plus,
   Trash2,
   DollarSign,
-  Check,
   Check,
   Loader2,
   Calendar,
@@ -52,6 +54,12 @@ interface Treatment {
   name: string;
   base_price: number;
   category: string;
+}
+
+interface Doctor {
+  id: string;
+  full_name: string;
+  color: string;
 }
 
 interface BudgetItem {
@@ -110,6 +118,12 @@ const PatientExam = () => {
   const [toothNotes, setToothNotes] = useState('');
   const [toothTreatmentId, setToothTreatmentId] = useState('');
 
+  // Budget Building State
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('cash');
+  const [savingBudget, setSavingBudget] = useState(false);
+
   useEffect(() => {
     if (patientId) {
       fetchData();
@@ -138,7 +152,7 @@ const PatientExam = () => {
       setUserId(user.id);
 
       // Fetch patient and odontogram in parallel
-      const [patientResult, odontogramResult, treatmentsResult] = await Promise.all([
+      const [patientResult, odontogramResult, treatmentsResult, doctorsResult] = await Promise.all([
         supabase
           .from('patients')
           .select('first_name, last_name')
@@ -151,13 +165,16 @@ const PatientExam = () => {
         supabase
           .from('treatments')
           .select('id, name, base_price, category')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
+          .eq('is_active', true) // Removed user_id filter
           .order('name'),
+        supabase
+          .from('doctors')
+          .select('id, full_name, color')
+          .eq('is_active', true)
+          .order('full_name'),
         supabase
           .from('clinical_notes')
           .select(`
-            *,
             *,
             profiles:user_id (first_name, last_name, role)
           `)
@@ -175,7 +192,10 @@ const PatientExam = () => {
       });
       setTeeth(teethMap);
       setTreatments(treatmentsResult.data || []);
-      setNotes(patientResult && treatmentsResult ? (await supabase.from('clinical_notes').select('*, profiles:user_id(first_name, last_name, role)').eq('patient_id', patientId).order('note_date', { ascending: false })).data || [] : []);
+      setDoctors(doctorsResult.data || []);
+
+      const notesResult = await supabase.from('clinical_notes').select('*, profiles:user_id(first_name, last_name, role)').eq('patient_id', patientId).order('note_date', { ascending: false });
+      setNotes(notesResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -209,7 +229,7 @@ const PatientExam = () => {
   }, [selectedTooth, toothCondition, toothNotes, toothTreatmentId]);
 
   // Save single tooth
-  const handleSaveTooth = async () => {
+  const handleSaveTooth = async (conditionOverride?: string, treatmentOverride?: string) => {
     if (!selectedTooth || !patientId || !userId) return;
 
     setSaving(true);
@@ -218,9 +238,9 @@ const PatientExam = () => {
         user_id: userId,
         patient_id: patientId,
         tooth_number: selectedTooth,
-        condition: toothCondition,
+        condition: conditionOverride ?? toothCondition,
         notes: toothNotes,
-        treatment_id: toothTreatmentId || null,
+        treatment_id: treatmentOverride ?? (toothTreatmentId || null),
         surfaces: teeth[selectedTooth]?.surfaces || {},
         updated_at: new Date().toISOString()
       };
@@ -237,7 +257,11 @@ const PatientExam = () => {
       // Update local state
       setTeeth(prev => ({
         ...prev,
-        [selectedTooth]: { ...prev[selectedTooth], ...toothData }
+        [selectedTooth]: {
+          ...prev[selectedTooth],
+          ...toothData,
+          treatment_id: toothData.treatment_id || undefined
+        }
       }));
 
       // Remove from modified set
@@ -247,14 +271,16 @@ const PatientExam = () => {
         return newSet;
       });
 
-      toast.success(`Diente ${selectedTooth} guardado`);
+      toast.success('Diente guardado');
     } catch (error) {
       console.error('Error saving tooth:', error);
-      toast.error('Error al guardar');
+      toast.error('Error al guardar diente');
     } finally {
       setSaving(false);
     }
   };
+
+
 
   // BULK SAVE - Save all modified teeth in ONE transaction
   const handleSaveAllTeeth = async () => {
@@ -384,6 +410,141 @@ const PatientExam = () => {
     setShowBudgetDialog(true);
   };
 
+  // Add current tooth's treatment to budget list (Unified Flow)
+  const handleAddToBudget = () => {
+    if (!selectedTooth || !toothTreatmentId) {
+      toast.error('Selecciona un tratamiento primero');
+      return;
+    }
+
+    const treatment = treatments.find(t => t.id === toothTreatmentId);
+    if (!treatment) return;
+
+    // Check if already in list
+    const exists = budgetItems.some(
+      item => item.treatment_id === toothTreatmentId && item.tooth_number === selectedTooth
+    );
+
+    if (exists) {
+      toast.info('Este tratamiento ya está en el presupuesto');
+      return;
+    }
+
+    const newItem: BudgetItem = {
+      treatment_id: treatment.id,
+      tooth_number: selectedTooth,
+      description: `${treatment.name} - OD ${selectedTooth}`,
+      quantity: 1,
+      unit_price: treatment.base_price,
+      total: treatment.base_price
+    };
+
+    setBudgetItems(prev => [...prev, newItem]);
+    toast.success(`${treatment.name} agregado al presupuesto`);
+  };
+
+  // Generate and save budget to DB (Unified Flow)
+  const handleGenerateBudget = async (andConsolidate: boolean = false) => {
+    if (budgetItems.length === 0) {
+      toast.error('Agrega al menos un tratamiento al presupuesto');
+      return;
+    }
+
+    if (!selectedDoctorId) {
+      toast.error('Selecciona un doctor responsable');
+      return;
+    }
+
+    setSavingBudget(true);
+    try {
+      const budgetData = {
+        patient_id: patientId,
+        doctor_id: selectedDoctorId,
+        subtotal,
+        discount_percent: discount,
+        discount_amount: discountAmount,
+        total,
+        status: andConsolidate ? 'accepted' : 'draft'
+      };
+
+      // 1. Create Budget
+      const { data: budget, error: budgetError } = await supabase
+        .from('budgets')
+        .insert(budgetData)
+        .select()
+        .single();
+
+      if (budgetError) throw budgetError;
+
+      // 2. Create Budget Items
+      const itemsToInsert = budgetItems.map(item => ({
+        budget_id: budget.id,
+        treatment_id: item.treatment_id || null,
+        tooth_number: item.tooth_number,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total: item.total
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('budget_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) throw itemsError;
+
+      // 3. If Consolidating, create clinical note and payment
+      if (andConsolidate) {
+        const doctor = doctors.find(d => d.id === selectedDoctorId);
+        const doctorName = doctor ? `Dr. ${doctor.full_name}` : 'Doctor';
+
+        const treatmentsList = budgetItems.map(i =>
+          `- ${i.description}: $${i.unit_price}`
+        ).join('\n');
+
+        const noteContent = `
+PRESUPUESTO ACEPTADO
+Doctor: ${doctorName}
+Plan de pagos: ${paymentTerms}
+
+TRATAMIENTOS:
+${treatmentsList}
+
+Total: $${total}
+        `.trim();
+
+        await supabase.from('clinical_notes').insert({
+          patient_id: patientId,
+          user_id: userId,
+          note: noteContent,
+          note_date: new Date().toISOString()
+        });
+
+        // Create pending payment
+        await supabase.from('payments').insert({
+          patient_id: patientId,
+          amount: total,
+          status: 'pending',
+          appointment_id: null
+        });
+
+        toast.success('Presupuesto consolidado. Pago registrado en finanzas.');
+      } else {
+        toast.success('Presupuesto guardado como borrador');
+      }
+
+      // Reset form
+      setBudgetItems([]);
+      setDiscount(0);
+
+    } catch (error) {
+      console.error('Error saving budget:', error);
+      toast.error('Error al guardar presupuesto');
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
   const addBudgetItem = () => {
     setBudgetItems(prev => [...prev, {
       treatment_id: '',
@@ -503,29 +664,7 @@ const PatientExam = () => {
               Paciente: <span className="text-ios-gray-900">{patientName}</span>
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {modifiedTeeth.size > 0 && (
-              <button
-                onClick={handleSaveAllTeeth}
-                disabled={savingAll}
-                className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-blue/90 transition-all duration-200 touch-feedback disabled:opacity-50"
-              >
-                {savingAll ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Save className="h-5 w-5" />
-                )}
-                Guardar Todo ({modifiedTeeth.size})
-              </button>
-            )}
-            <button
-              onClick={generateBudgetFromOdontogram}
-              className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-green text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-green/90 transition-all duration-200 touch-feedback"
-            >
-              <DollarSign className="h-5 w-5" />
-              Generar Presupuesto
-            </button>
-          </div>
+          {/* Legacy buttons removed - teeth auto-save, new workflow uses integrated panel */}
         </div>
       </div>
 
@@ -658,8 +797,7 @@ const PatientExam = () => {
                     value={toothCondition}
                     onValueChange={(value) => {
                       setToothCondition(value);
-                      // Mark as modified immediately
-                      setModifiedTeeth(prev => new Set(prev).add(selectedTooth));
+                      // Update local state immediately for UI responsiveness
                       setTeeth(prev => ({
                         ...prev,
                         [selectedTooth]: {
@@ -669,6 +807,8 @@ const PatientExam = () => {
                           surfaces: prev[selectedTooth]?.surfaces || {}
                         }
                       }));
+                      // Auto-save the change
+                      handleSaveTooth(value);
                     }}
                   >
                     <SelectTrigger className="ios-input">
@@ -738,37 +878,159 @@ const PatientExam = () => {
                   />
                 </div>
 
-                <button
-                  onClick={handleSaveTooth}
-                  disabled={saving}
-                  className="w-full h-12 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50"
-                >
-                  {saving ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Save className="h-5 w-5" />
-                      Guardar Diente
-                    </>
-                  )}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSaveTooth()}
+                    disabled={saving}
+                    className="flex-1 h-11 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 text-sm"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Guardar
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleAddToBudget}
+                    disabled={!toothTreatmentId}
+                    className="flex-1 h-11 rounded-xl bg-ios-green text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 text-sm"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Al Presupuesto
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <div className="h-16 w-16 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-4">
-                <FileText className="h-8 w-8 text-ios-gray-400" />
+            <div className="text-center py-8">
+              <div className="h-12 w-12 rounded-full bg-ios-gray-100 flex items-center justify-center mx-auto mb-3">
+                <FileText className="h-6 w-6 text-ios-gray-400" />
               </div>
-              <p className="text-ios-gray-900 font-semibold">Selecciona un diente</p>
-              <p className="text-ios-gray-500 text-sm mt-1">
-                Haz clic en cualquier diente para ver o editar su información
+              <p className="text-ios-gray-900 font-semibold text-sm">Selecciona un diente</p>
+              <p className="text-ios-gray-500 text-xs mt-1">
+                Haz clic en cualquier diente para editar
               </p>
             </div>
           )}
+
+          {/* Budget Items List - Always Visible */}
+          <div className="mt-6 border-t border-ios-gray-100 pt-6">
+            <h4 className="text-sm font-bold text-ios-gray-900 mb-3 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-ios-green" />
+              Presupuesto en Construcción
+              {budgetItems.length > 0 && (
+                <span className="ml-auto text-xs font-medium bg-ios-green/10 text-ios-green px-2 py-0.5 rounded-full">
+                  {budgetItems.length} items
+                </span>
+              )}
+            </h4>
+
+            {budgetItems.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {budgetItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-ios-gray-50 rounded-xl text-sm">
+                    <div className="flex-1">
+                      <span className="font-medium text-ios-gray-900">{item.description}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-ios-green">${item.unit_price.toLocaleString()}</span>
+                      <button
+                        onClick={() => removeBudgetItem(idx)}
+                        className="text-ios-gray-400 hover:text-ios-red transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Totals */}
+                <div className="pt-3 border-t border-ios-gray-200 space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-ios-gray-500">Subtotal</span>
+                    <span className="font-medium">${subtotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold text-ios-green">
+                    <span>Total</span>
+                    <span>${total.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Doctor & Payment */}
+                <div className="pt-4 space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-ios-gray-500">Doctor Responsable</Label>
+                    <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                      <SelectTrigger className="ios-input h-10">
+                        <SelectValue placeholder="Seleccionar doctor" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {doctors.map(d => (
+                          <SelectItem key={d.id} value={d.id}>
+                            <div className="flex items-center gap-2">
+                              {d.color && (
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: d.color }}
+                                />
+                              )}
+                              {d.full_name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-ios-gray-500">Plan de Pago</Label>
+                    <Select value={paymentTerms} onValueChange={setPaymentTerms}>
+                      <SelectTrigger className="ios-input h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="cash">Contado</SelectItem>
+                        <SelectItem value="3_months">3 Meses</SelectItem>
+                        <SelectItem value="6_months">6 Meses</SelectItem>
+                        <SelectItem value="12_months">12 Meses</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-4 space-y-2">
+                  <button
+                    onClick={() => handleGenerateBudget(false)}
+                    disabled={savingBudget || budgetItems.length === 0 || !selectedDoctorId}
+                    className="w-full h-11 rounded-xl bg-ios-blue text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-blue/90 transition-colors touch-feedback disabled:opacity-50 text-sm"
+                  >
+                    {savingBudget ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    Generar Plan de Tratamiento
+                  </button>
+                  <button
+                    onClick={() => handleGenerateBudget(true)}
+                    disabled={savingBudget || budgetItems.length === 0 || !selectedDoctorId}
+                    className="w-full h-11 rounded-xl bg-ios-green text-white font-semibold flex items-center justify-center gap-2 hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 text-sm"
+                  >
+                    {savingBudget ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    Generar Nota de Evolución
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-ios-gray-400 bg-ios-gray-50 rounded-xl border border-dashed border-ios-gray-200">
+                <p className="text-xs">Agrega tratamientos desde el diente seleccionado</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Budget Dialog */}
+      {/* Legacy Budget Dialog - Can be removed later */}
       <Dialog open={showBudgetDialog} onOpenChange={setShowBudgetDialog}>
         <DialogContent className="max-w-3xl rounded-3xl border-0 shadow-ios-xl p-0 overflow-hidden max-h-[90vh]">
           <DialogHeader className="p-6 pb-4 border-b border-ios-gray-100">

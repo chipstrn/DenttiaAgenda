@@ -58,6 +58,8 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
   // Menú de recepción
   const receptionMenuItems = useMemo(() => [
+    { icon: FileText, label: 'Presupuestos', path: '/budgets', color: 'bg-ios-blue' },
+    { icon: CreditCard, label: 'Pagos de Pacientes', path: '/patient-payments', color: 'bg-ios-purple' },
     { icon: DollarSign, label: 'Caja y Cobros', path: '/reception-finance', color: 'bg-ios-green' },
     { icon: Calculator, label: 'Corte de Caja', path: '/cash-register', color: 'bg-ios-teal' },
   ], []);

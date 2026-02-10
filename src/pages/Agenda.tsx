@@ -35,6 +35,8 @@ import {
 import { toast } from 'sonner';
 import { format, addDays, subDays, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { List } from 'react-window';
+import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { cn } from '@/lib/utils';
 
 interface Appointment {
@@ -100,6 +102,97 @@ const TIME_SLOTS = Array.from({ length: 26 }, (_, i) => {
   return hour >= 8 && hour < 21;
 });
 
+const AppointmentRow = ({ index, style, data }: { index: number; style: React.CSSProperties; data: any }) => {
+  const apt = data.appointments[index];
+  const doctorColor = data.doctors.find((d: any) => d.id === apt.doctor_id)?.color || '#007AFF';
+  const statusOption = data.STATUS_OPTIONS.find((s: any) => s.value === apt.status);
+
+  return (
+    <div style={{ ...style, paddingBottom: '10px', paddingRight: '5px' }}>
+      <div
+        className={cn(
+          "group relative rounded-2xl transition-all duration-300 ease-out overflow-hidden cursor-pointer h-full",
+          apt.type === 'personal'
+            ? 'bg-gradient-to-r from-ios-gray-100 to-ios-gray-50 border-2 border-dashed border-ios-gray-300'
+            : 'bg-white border border-ios-gray-100 hover:border-ios-gray-200 hover:shadow-lg hover:shadow-ios-gray-100/50'
+        )}
+        onDoubleClick={() => data.onEdit(apt)}
+      >
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl"
+          style={{ backgroundColor: doctorColor }}
+        />
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 pl-5 h-full">
+          <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
+            <div className="text-center min-w-[65px]">
+              <div className={cn(
+                "inline-flex flex-col items-center px-3 py-2 rounded-xl",
+                apt.type === 'personal'
+                  ? "bg-ios-gray-200"
+                  : "bg-gradient-to-br from-ios-gray-50 to-white border border-ios-gray-100"
+              )}>
+                <p className="text-lg font-bold text-ios-gray-900 leading-none">
+                  {format(new Date(apt.start_time), 'HH:mm')}
+                </p>
+                <div className="h-px w-4 bg-ios-gray-300 my-1" />
+                <p className="text-xs text-ios-gray-500 leading-none">
+                  {format(new Date(apt.end_time), 'HH:mm')}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-semibold text-ios-gray-900 truncate">{apt.title}</p>
+                {apt.type === 'personal' && (
+                  <span className="px-2 py-0.5 rounded-full bg-ios-gray-300/50 text-ios-gray-600 text-xs font-medium flex items-center gap-1">
+                    <Coffee className="h-3 w-3" />
+                    Personal
+                  </span>
+                )}
+              </div>
+              {apt.type !== 'personal' && apt.patients && (
+                <p className="text-sm text-ios-gray-500 flex items-center gap-1.5 mt-1">
+                  <User className="h-3.5 w-3.5" />
+                  <span className="font-medium">{apt.patients.first_name} {apt.patients.last_name}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {apt.type !== 'personal' && (
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 border-ios-gray-100 pt-3 sm:pt-0">
+              <button
+                onClick={() => data.onWhatsApp(apt)}
+                className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green hover:text-white transition-all touch-feedback"
+              >
+                <MessageCircle className="h-4 w-4 text-ios-green" />
+              </button>
+              <Select value={apt.status} onValueChange={(value) => data.onUpdateStatus(apt.id, value)}>
+                <SelectTrigger className={cn("w-full sm:w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", data.getStatusStyle(apt.status))}>
+                  {statusOption && <statusOption.icon className="h-3.5 w-3.5 mr-1.5" />}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {data.STATUS_OPTIONS.map((option: any) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <span className={cn("flex items-center gap-2", option.color)}>
+                        <option.icon className="h-3.5 w-3.5" />
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Agenda = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -111,7 +204,7 @@ const Agenda = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedLocation, setSelectedLocation] = useState<string>('9b8f816c-34ee-4967-a5a2-69af15e48f7d'); // Default: Tehuacán
+  const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [appointmentType, setAppointmentType] = useState<'medical' | 'personal'>('medical');
   const [patientSearch, setPatientSearch] = useState('');
@@ -296,7 +389,7 @@ const Agenda = () => {
         status: appointmentType === 'medical' ? status : 'confirmed',
         treatment_type: appointmentType === 'medical' ? selectedTreatmentId : null,
         type: appointmentType,
-        location_id: formLocationId || (selectedLocation !== 'all' ? selectedLocation : null),
+        location_id: formLocationId || (selectedLocation !== 'all' ? selectedLocation : (locations.length > 0 ? locations[0].id : null)),
         patient_data_status: 'complete',
         doctor_id: selectedDoctorId || null
       };
@@ -340,118 +433,20 @@ const Agenda = () => {
 
       if (error) throw error;
 
-      // Finance Trigger: If completed, create payment record
-      if (newStatus === 'completed') {
-        const appointment = appointments.find(a => a.id === id);
-        if (appointment && appointment.type === 'medical') {
-          // Find price
-          let amount = 0;
-          if (appointment.treatment_type) {
-            const treatment = treatments.find(t => t.id === appointment.treatment_type);
-            if (treatment) amount = treatment.base_price;
-          } else {
-            // Fallback: try to match by title
-            const treatment = treatments.find(t => t.name === appointment.title);
-            if (treatment) amount = treatment.base_price;
-          }
-
-          // Check if payment already exists
-          const { data: existing } = await supabase
-            .from('payments')
-            .select('id')
-            .eq('appointment_id', id)
-            .single();
-          if (!existing) {
-            await supabase
-              .from('payments')
-              .insert({
-                appointment_id: id,
-                amount: amount,
-                status: 'pending', // Pending collection
-                patient_id: appointment.patient_id,
-                created_at: new Date().toISOString()
-              });
-            toast.success('Clínica: Cargo enviado a finanzas');
-          }
-
-
-          // Commission Trigger
-          if (appointment.doctor_id) {
-            let commissionPercentage = 0;
-            let commissionAmount = 0;
-            let commissionSource = '';
-
-            // 1. Check Treatment Commission
-            if (appointment.treatment_type) {
-              const treatment = treatments.find(t => t.id === appointment.treatment_type);
-              if (treatment?.commission_percentage && treatment.commission_percentage > 0) {
-                const type = treatment.commission_type || 'percent';
-
-                if (type === 'percent') {
-                  commissionPercentage = treatment.commission_percentage;
-                  commissionSource = 'treatment';
-                } else {
-                  commissionAmount = treatment.commission_percentage;
-                  commissionSource = 'treatment_fixed';
-                }
-              }
-            }
-
-            // 2. Check Doctor Global Commission (Fallback)
-            if (commissionSource === '') {
-              const { data: settings } = await supabase
-                .from('commission_settings')
-                .select('percentage')
-                .eq('doctor_id', appointment.doctor_id)
-                .single();
-
-              if (settings?.percentage) {
-                commissionPercentage = settings.percentage;
-                commissionSource = 'doctor_global';
-              }
-            }
-
-            if (commissionPercentage > 0 || commissionAmount > 0) {
-              if (commissionSource !== 'treatment_fixed') {
-                commissionAmount = (amount * commissionPercentage) / 100;
-              }
-
-              // Check duplicate commission
-              const { data: existingComm } = await supabase
-                .from('doctor_commissions')
-                .select('id')
-                .eq('appointment_id', id)
-                .single();
-
-              if (!existingComm) {
-                await supabase.from('doctor_commissions').insert({
-                  doctor_id: appointment.doctor_id,
-                  appointment_id: id,
-                  amount: commissionAmount,
-                  status: 'pending',
-                  created_at: new Date().toISOString()
-                });
-
-                const msg = commissionSource === 'treatment_fixed'
-                  ? `Comisión fija generada ($${commissionAmount})`
-                  : `Comisión generada (${commissionPercentage}%)`;
-
-                toast.success(msg);
-              }
-            }
-          }
-        }
-      }
-
       setAppointments(prev =>
         prev.map(apt => apt.id === id ? { ...apt, status: newStatus } : apt)
       );
-      toast.success('Estado actualizado');
+
+      if (newStatus === 'completed') {
+        toast.success('Cita completada. Registros financieros generados automáticamente.');
+      } else {
+        toast.success('Estado actualizado');
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Error al actualizar');
     }
-  }, [appointments, treatments]);
+  }, []);
 
   const sendWhatsAppReminder = useCallback((appointment: Appointment) => {
     if (!appointment.patients?.phone) {
@@ -548,6 +543,9 @@ const Agenda = () => {
               // Pre-fill location if viewing a specific location
               if (selectedLocation !== 'all') {
                 setFormLocationId(selectedLocation);
+              } else if (locations.length > 0) {
+                // If viewing 'all', default to first location available
+                setFormLocationId(locations[0].id);
               }
               setIsDialogOpen(true);
             }}
@@ -780,120 +778,47 @@ const Agenda = () => {
             ) : viewMode === 'list' ? (
               /* LIST VIEW */
               filteredAppointments.length > 0 ? (
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                  {filteredAppointments.map((apt, index) => {
-                    const doctorColor = doctors.find(d => d.id === apt.doctor_id)?.color || '#007AFF';
-                    const statusOption = STATUS_OPTIONS.find(s => s.value === apt.status);
-
-                    return (
-                      <div
-                        key={apt.id}
-                        className={cn(
-                          "group relative rounded-2xl transition-all duration-300 ease-out animate-fade-in overflow-hidden cursor-pointer",
-                          apt.type === 'personal'
-                            ? 'bg-gradient-to-r from-ios-gray-100 to-ios-gray-50 border-2 border-dashed border-ios-gray-300'
-                            : 'bg-white border border-ios-gray-100 hover:border-ios-gray-200 hover:shadow-lg hover:shadow-ios-gray-100/50 hover:scale-[1.01]'
-                        )}
-                        style={{ animationDelay: `${150 + index * 50}ms` }}
-                        onDoubleClick={() => {
-                          setEditingAppointmentId(apt.id);
-                          setAppointmentType(apt.type);
-                          if (apt.type === 'medical') {
-                            setTitle(apt.title);
-                            setDescription(apt.description || '');
-                            setSelectedPatientId(apt.patient_id || '');
-                            setSelectedDoctorId(apt.doctor_id || '');
-                            setSelectedTreatmentId(apt.treatment_type || '');
-                            setFormLocationId(apt.location_id || '');
-                            setStatus(apt.status);
-                          } else {
-                            setEventTitle(apt.title);
-                            setEventDescription(apt.description || '');
-                            setSelectedDoctorId(apt.doctor_id || '');
-                            setFormLocationId(apt.location_id || '');
-                          }
-                          setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
-                          setStartTime(format(new Date(apt.start_time), 'HH:mm'));
-                          setEndTime(format(new Date(apt.end_time), 'HH:mm'));
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        {/* Left color stripe - now shows for personal events too */}
-                        <div
-                          className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl"
-                          style={{ backgroundColor: doctorColor }}
-                        />
-
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 pl-5">
-                          <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
-                            <div className="text-center min-w-[65px]">
-                              <div className={cn(
-                                "inline-flex flex-col items-center px-3 py-2 rounded-xl",
-                                apt.type === 'personal'
-                                  ? "bg-ios-gray-200"
-                                  : "bg-gradient-to-br from-ios-gray-50 to-white border border-ios-gray-100"
-                              )}>
-                                <p className="text-lg font-bold text-ios-gray-900 leading-none">
-                                  {format(new Date(apt.start_time), 'HH:mm')}
-                                </p>
-                                <div className="h-px w-4 bg-ios-gray-300 my-1" />
-                                <p className="text-xs text-ios-gray-500 leading-none">
-                                  {format(new Date(apt.end_time), 'HH:mm')}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-ios-gray-900 truncate">{apt.title}</p>
-                                {apt.type === 'personal' && (
-                                  <span className="px-2 py-0.5 rounded-full bg-ios-gray-300/50 text-ios-gray-600 text-xs font-medium flex items-center gap-1">
-                                    <Coffee className="h-3 w-3" />
-                                    Personal
-                                  </span>
-                                )}
-                              </div>
-                              {apt.type !== 'personal' && apt.patients && (
-                                <p className="text-sm text-ios-gray-500 flex items-center gap-1.5 mt-1">
-                                  <User className="h-3.5 w-3.5" />
-                                  <span className="font-medium">{apt.patients.first_name} {apt.patients.last_name}</span>
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {apt.type !== 'personal' && (
-                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 border-ios-gray-100 pt-3 sm:pt-0">
-                              <button
-                                onClick={() => sendWhatsAppReminder(apt)}
-                                className="h-10 w-10 rounded-xl bg-ios-green/10 flex items-center justify-center hover:bg-ios-green hover:text-white transition-all touch-feedback"
-                              >
-                                <MessageCircle className="h-4 w-4 text-ios-green" />
-                              </button>
-                              <div onClick={(e) => e.stopPropagation()}>
-                                <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
-                                  <SelectTrigger className={cn("w-full sm:w-[130px] h-10 rounded-xl border-0 text-xs font-semibold shadow-sm", getStatusStyle(apt.status))}>
-                                    {statusOption && <statusOption.icon className="h-3.5 w-3.5 mr-1.5" />}
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="rounded-xl">
-                                    {STATUS_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        <span className={cn("flex items-center gap-2", option.color)}>
-                                          <option.icon className="h-3.5 w-3.5" />
-                                          {option.label}
-                                        </span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="h-[500px]">
+                  <AutoSizer renderProp={({ height, width }) => (
+                    <List
+                      style={{ height: height ?? 500, width: width ?? '100%' }}
+                      rowCount={filteredAppointments.length}
+                      rowHeight={130}
+                      rowProps={{
+                        data: {
+                          appointments: filteredAppointments,
+                          doctors,
+                          STATUS_OPTIONS,
+                          onEdit: (apt: Appointment) => {
+                            setEditingAppointmentId(apt.id);
+                            setAppointmentType(apt.type);
+                            if (apt.type === 'medical') {
+                              setTitle(apt.title);
+                              setDescription(apt.description || '');
+                              setSelectedPatientId(apt.patient_id || '');
+                              setSelectedDoctorId(apt.doctor_id || '');
+                              setSelectedTreatmentId(apt.treatment_type || '');
+                              setFormLocationId(apt.location_id || '');
+                              setStatus(apt.status);
+                            } else {
+                              setEventTitle(apt.title);
+                              setEventDescription(apt.description || '');
+                              setSelectedDoctorId(apt.doctor_id || '');
+                              setFormLocationId(apt.location_id || '');
+                            }
+                            setAppointmentDate(format(new Date(apt.start_time), 'yyyy-MM-dd'));
+                            setStartTime(format(new Date(apt.start_time), 'HH:mm'));
+                            setEndTime(format(new Date(apt.end_time), 'HH:mm'));
+                            setIsDialogOpen(true);
+                          },
+                          onUpdateStatus: updateStatus,
+                          onWhatsApp: sendWhatsAppReminder,
+                          getStatusStyle
+                        }
+                      }}
+                      rowComponent={AppointmentRow as any}
+                    />
+                  )} />
                 </div>
               ) : (
                 <div className="text-center py-16">
@@ -1085,25 +1010,23 @@ const Agenda = () => {
                                     </p>
                                   )}
                                 </div>
-                                <div onClick={(e) => e.stopPropagation()}>
-                                  <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
-                                    <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
-                                      {STATUS_OPTIONS.find(s => s.value === apt.status) && (
-                                        <div className="h-2 w-2 rounded-full bg-current" />
-                                      )}
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl">
-                                      {STATUS_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          <span className={cn("flex items-center gap-2", option.color)}>
-                                            <option.icon className="h-3 w-3" />
-                                            {option.label}
-                                          </span>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                                <Select value={apt.status} onValueChange={(value) => updateStatus(apt.id, value)}>
+                                  <SelectTrigger className={cn("h-6 w-6 rounded-full border-0 p-0 flex-shrink-0", getStatusStyle(apt.status))}>
+                                    {STATUS_OPTIONS.find(s => s.value === apt.status) && (
+                                      <div className="h-2 w-2 rounded-full bg-current" />
+                                    )}
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl">
+                                    {STATUS_OPTIONS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        <span className={cn("flex items-center gap-2", option.color)}>
+                                          <option.icon className="h-3 w-3" />
+                                          {option.label}
+                                        </span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
                           );
@@ -1468,23 +1391,7 @@ const Agenda = () => {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-ios-gray-600">Inicio</Label>
-                    <Select value={startTime} onValueChange={(value) => {
-                      setStartTime(value);
-                      // Auto-update end time if treatment is selected
-                      if (selectedTreatmentId) {
-                        const treatment = treatments.find(t => t.id === selectedTreatmentId);
-                        if (treatment?.duration_minutes) {
-                          const [hours, minutes] = value.split(':').map(Number);
-                          const startMinutes = hours * 60 + minutes;
-                          const endMinutes = startMinutes + treatment.duration_minutes;
-                          const endHours = Math.floor(endMinutes / 60);
-                          const endMins = endMinutes % 60;
-                          const finalHour = Math.min(endHours, 20);
-                          const finalMin = endHours >= 20 ? 0 : endMins;
-                          setEndTime(`${finalHour.toString().padStart(2, '0')}:${finalMin.toString().padStart(2, '0')}`);
-                        }
-                      }
-                    }}>
+                    <Select value={startTime} onValueChange={setStartTime}>
                       <SelectTrigger className="ios-input text-sm">
                         <SelectValue />
                       </SelectTrigger>

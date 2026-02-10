@@ -12,6 +12,7 @@ interface UserProfile {
   is_active: boolean;
   must_change_password: boolean;
   last_login: string | null;
+  clinic_id: string | null;
 }
 
 interface AuthContextType {
@@ -51,7 +52,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role, is_active, must_change_password, last_login')
+        .select('id, first_name, last_name, role, is_active, must_change_password, last_login, clinic_id')
         .eq('id', userId)
         .single();
 
@@ -92,13 +93,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeAuth = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        
+
         if (!isMounted) return;
 
         if (currentSession?.user) {
           setSession(currentSession);
           setUser(currentSession.user);
-          
+
           const profileData = await fetchProfile(currentSession.user.id);
           if (isMounted) {
             setProfile(profileData);
@@ -136,7 +137,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (event === 'SIGNED_IN' && newSession?.user) {
           setSession(newSession);
           setUser(newSession.user);
-          
+
           // Fetch profile in background
           const profileData = await fetchProfile(newSession.user.id);
           setProfile(profileData);

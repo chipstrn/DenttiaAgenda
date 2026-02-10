@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { generatePrescriptionPDF } from '@/utils/pdfGenerator';
 import MainLayout from '@/components/layout/MainLayout';
 import { Label } from '@/components/ui/label';
 import {
@@ -62,7 +63,7 @@ const Prescriptions = () => {
   const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [patientId, setPatientId] = useState('');
   const [doctorId, setDoctorId] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
@@ -135,7 +136,7 @@ const Prescriptions = () => {
         });
 
       if (error) throw error;
-      
+
       toast.success('Receta creada');
       setIsDialogOpen(false);
       resetForm();
@@ -149,73 +150,18 @@ const Prescriptions = () => {
   };
 
   const handlePrint = useCallback((prescription: Prescription) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Receta Médica</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-          .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-          .header h1 { margin: 0; color: #1a365d; }
-          .header p { margin: 5px 0; color: #666; }
-          .info { display: flex; justify-content: space-between; margin-bottom: 30px; }
-          .info-block { }
-          .info-block label { font-weight: bold; color: #333; }
-          .info-block p { margin: 5px 0; }
-          .section { margin-bottom: 25px; }
-          .section h3 { color: #1a365d; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-          .section p { white-space: pre-wrap; line-height: 1.6; }
-          .footer { margin-top: 50px; text-align: center; }
-          .signature { margin-top: 60px; border-top: 1px solid #333; width: 200px; margin-left: auto; margin-right: auto; padding-top: 10px; }
-          .clinic-info { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 12px; color: #666; }
-          @media print { body { padding: 20px; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>${CLINIC_CONFIG.name}</h1>
-          <p>${CLINIC_CONFIG.locations.tehuacan.address}</p>
-          <p>Tel: ${CLINIC_CONFIG.phone} | WhatsApp: ${CLINIC_CONFIG.whatsappDisplay}</p>
-        </div>
-        
-        <div class="info">
-          <div class="info-block">
-            <label>Paciente:</label>
-            <p>${prescription.patients?.first_name || ''} ${prescription.patients?.last_name || ''}</p>
-          </div>
-          <div class="info-block">
-            <label>Fecha:</label>
-            <p>${format(new Date(prescription.created_at), "d 'de' MMMM 'de' yyyy", { locale: es })}</p>
-          </div>
-        </div>
-        
-        <div class="section">
-          <h3>Prescripción</h3>
-          <p>${prescription.observations || 'No especificado'}</p>
-        </div>
-        
-        <div class="footer">
-          <div class="signature">
-            <p>${prescription.doctors?.full_name || 'Doctor'}</p>
-            ${prescription.doctors?.specialty ? `<p style="font-size: 12px; color: #666;">${prescription.doctors.specialty}</p>` : ''}
-          </div>
-        </div>
-        
-        <div class="clinic-info">
-          <p><strong>Horarios:</strong> ${CLINIC_CONFIG.scheduleText.weekdays}</p>
-          <p>${CLINIC_CONFIG.scheduleText.saturday} | ${CLINIC_CONFIG.scheduleText.sunday}</p>
-        </div>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.print();
+    try {
+      generatePrescriptionPDF({
+        doctorName: prescription.doctors?.full_name || 'Desconocido',
+        patientName: `${prescription.patients?.first_name || ''} ${prescription.patients?.last_name || ''}`,
+        date: prescription.created_at,
+        content: prescription.observations || 'Sin contenido'
+      });
+      toast.success('PDF generado exitosamente');
+    } catch (error) {
+      console.error('Error determining PDF:', error);
+      toast.error('Error al generar PDF');
+    }
   }, []);
 
   const filteredPrescriptions = prescriptions.filter(p => {
@@ -233,7 +179,7 @@ const Prescriptions = () => {
           <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">Recetas</h1>
           <p className="text-ios-gray-500 mt-1 font-medium">{prescriptions.length} recetas emitidas</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsDialogOpen(true)}
           className="flex items-center gap-2 h-11 px-5 rounded-xl bg-ios-pink text-white font-semibold text-sm shadow-ios-sm hover:bg-ios-pink/90 transition-all duration-200 touch-feedback"
         >
@@ -265,7 +211,7 @@ const Prescriptions = () => {
         ) : filteredPrescriptions.length > 0 ? (
           <div className="divide-y divide-ios-gray-100">
             {filteredPrescriptions.map((prescription, index) => (
-              <div 
+              <div
                 key={prescription.id}
                 className="flex items-center gap-4 p-4 hover:bg-ios-gray-50 transition-all duration-200 ease-ios animate-fade-in"
                 style={{ animationDelay: `${150 + index * 30}ms` }}
@@ -273,7 +219,7 @@ const Prescriptions = () => {
                 <div className="h-12 w-12 rounded-2xl bg-ios-pink/15 flex items-center justify-center">
                   <FileText className="h-6 w-6 text-ios-pink" />
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-ios-gray-900">
                     {prescription.patients?.first_name} {prescription.patients?.last_name}
@@ -289,7 +235,7 @@ const Prescriptions = () => {
                   </p>
                 </div>
 
-                <button 
+                <button
                   onClick={() => handlePrint(prescription)}
                   className="h-10 w-10 rounded-xl bg-ios-blue/10 flex items-center justify-center hover:bg-ios-blue/20 transition-colors touch-feedback"
                 >
@@ -305,7 +251,7 @@ const Prescriptions = () => {
             </div>
             <p className="text-ios-gray-900 font-semibold">Sin recetas</p>
             <p className="text-ios-gray-500 text-sm mt-1">No hay recetas registradas</p>
-            <button 
+            <button
               onClick={() => setIsDialogOpen(true)}
               className="mt-4 text-ios-pink font-semibold text-sm hover:opacity-70 transition-opacity"
             >
@@ -327,7 +273,7 @@ const Prescriptions = () => {
               Crea una receta médica
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit}>
             <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
@@ -393,16 +339,16 @@ const Prescriptions = () => {
                 />
               </div>
             </div>
-            
+
             <div className="p-6 pt-4 flex gap-3">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsDialogOpen(false)}
                 className="flex-1 h-12 rounded-xl bg-ios-gray-100 text-ios-gray-900 font-semibold hover:bg-ios-gray-200 transition-colors touch-feedback"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="submit"
                 disabled={saving}
                 className="flex-1 h-12 rounded-xl bg-ios-pink text-white font-semibold hover:bg-ios-pink/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
