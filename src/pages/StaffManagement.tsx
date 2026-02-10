@@ -411,7 +411,7 @@ const StaffManagement = () => {
                     type="email"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="usuario@denttia.com"
+                    placeholder="usuario@klinikos.com"
                     required
                     className="ios-input pl-12"
                   />

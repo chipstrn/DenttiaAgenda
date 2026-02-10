@@ -17,12 +17,11 @@ export const generatePrescriptionPDF = (data: PrescriptionData) => {
     // -- Header --
     doc.setFontSize(22);
     doc.setTextColor(40, 40, 40);
-    doc.text("Denttia Agenda", 20, 20);
+    doc.text("Sistema de Gestión Clínica", 20, 20);
 
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text("Clínica Dental Especializada", 20, 26);
-    doc.text("Tel: (555) 123-4567 | Email: contacto@denttia.com", 20, 31);
+    doc.text("Receta Médica", 20, 26);
 
     // Line separator
     doc.setDrawColor(200, 200, 200);
@@ -66,7 +65,7 @@ export const generatePrescriptionPDF = (data: PrescriptionData) => {
 
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text("Generado por Denttia Agenda", pageWidth / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+    doc.text("Generado por KlinikOS", pageWidth / 2, doc.internal.pageSize.height - 10, { align: 'center' });
 
     // Save
     doc.save(`Receta_${data.patientName.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`);
@@ -101,7 +100,7 @@ export const generateClinicalHistoryPDF = (data: ClinicalHistoryData) => {
 
     // Header
     doc.setFontSize(18);
-    doc.text("Historia Clínica - Denttia", 14, 20);
+    doc.text("Historia Clínica", 14, 20);
     doc.setFontSize(10);
     doc.text(`Generado: ${format(new Date(), "d MMM yyyy HH:mm", { locale: es })}`, 14, 26);
 
@@ -229,7 +228,7 @@ export const generateInformedConsentPDF = (data: ConsentData) => {
     // Digital Stamp
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    const stamp = `Firmado digitalmente en Denttia Agenda | ${format(new Date(), "yyyy-MM-dd HH:mm:ss", { locale: es })} | Hash: ${Math.random().toString(36).substring(7).toUpperCase()}`;
+    const stamp = `Firmado digitalmente en KlinikOS | ${format(new Date(), "yyyy-MM-dd HH:mm:ss", { locale: es })} | Hash: ${Math.random().toString(36).substring(7).toUpperCase()}`;
     doc.text(stamp, pageWidth / 2, pageHeight - 10, { align: 'center' });
 
     doc.save(`Consentimiento_${data.patientName.replace(/\s+/g, '_')}.pdf`);

@@ -778,7 +778,7 @@ const FinanceAudit = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={cn("text-xs font-medium", !useManualSource ? 'text-ios-gray-900' : 'text-ios-gray-400')}>
-                        Denttia
+                        KlinikOS
                       </span>
                       <Switch
                         checked={useManualSource}
@@ -809,7 +809,7 @@ const FinanceAudit = () => {
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <p className="text-sm text-ios-gray-500 mb-2">Total del sistema Denttia</p>
+                      <p className="text-sm text-ios-gray-500 mb-2">Total del sistema KlinikOS</p>
                       <p className="text-3xl font-bold text-ios-gray-900">${systemExpected.toFixed(2)}</p>
                     </div>
                   )}

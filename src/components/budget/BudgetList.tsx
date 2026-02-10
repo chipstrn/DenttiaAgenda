@@ -74,7 +74,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
 
         const doctorName = (budget.doctor as any)?.first_name
             ? `${(budget.doctor as any).first_name} ${(budget.doctor as any).last_name}`
-            : 'Denttia Clinic';
+            : 'Clínica Dental';
 
         const patientName = (budget as any).patient
             ? `${(budget as any).patient.first_name} ${(budget as any).patient.last_name}`

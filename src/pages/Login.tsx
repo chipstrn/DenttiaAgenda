@@ -47,7 +47,7 @@ const Login = () => {
           .from('profiles')
           .update({ last_login: new Date().toISOString() })
           .eq('id', data.user.id)
-          .then(() => {});
+          .then(() => { });
       }
 
       toast.success('Bienvenido');
@@ -77,17 +77,17 @@ const Login = () => {
     <div className="min-h-screen bg-ios-gray-100 flex flex-col items-center justify-center p-6">
       {/* Background Gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-ios-blue/5 via-transparent to-ios-purple/5 pointer-events-none" />
-      
+
       <div className="w-full max-w-sm relative animate-scale-in">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-3xl bg-gradient-to-br from-ios-blue to-ios-indigo shadow-ios-lg mb-4">
             <Activity className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Denttia ERP - Sistema Dental</h1>
-          <p className="text-ios-gray-500 mt-1 font-medium">Sistema de Gestión Dental</p>
+          <h1 className="text-2xl font-bold text-ios-gray-900 tracking-tight">Bienvenido a KlinikOS</h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">Gestión Clínica Inteligente</p>
         </div>
-        
+
         {/* Login Card */}
         <div className="ios-card p-6 shadow-ios-lg">
           <form onSubmit={handleLogin} className="space-y-4">
@@ -99,7 +99,7 @@ const Login = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="usuario@denttia.com"
+                placeholder="usuario@klinikos.com"
                 required
                 className="ios-input"
                 autoComplete="email"
@@ -152,10 +152,10 @@ const Login = () => {
             </p>
           </div>
         </div>
-        
+
         {/* Footer */}
         <p className="text-center text-xs text-ios-gray-400 mt-6 font-medium">
-          © 2024 Denttia. Todos los derechos reservados.
+          © 2024 KlinikOS. Todos los derechos reservados.
         </p>
       </div>
     </div>

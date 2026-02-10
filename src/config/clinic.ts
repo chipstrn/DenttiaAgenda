@@ -1,13 +1,17 @@
-// Configuración centralizada de la clínica Denttia
+// Configuración centralizada de la clínica KlinikOS
+
+// Nombre del sistema SaaS
+export const SYSTEM_NAME = 'KlinikOS';
+
 export const CLINIC_CONFIG = {
-  name: 'Denttia Servicios Dentales y Ortodoncia',
-  shortName: 'Denttia',
-  
+  name: 'KlinikOS',
+  shortName: 'KlinikOS',
+
   // Contacto oficial
   whatsapp: '5212381106200', // Formato internacional para wa.me
   whatsappDisplay: '238 110 6200',
   phone: '238 392 9829',
-  
+
   // Sedes
   locations: {
     tehuacan: {
@@ -23,7 +27,7 @@ export const CLINIC_CONFIG = {
       shortAddress: 'Huautla de Jiménez',
     }
   },
-  
+
   // Horarios
   schedule: {
     weekdays: {
@@ -36,7 +40,7 @@ export const CLINIC_CONFIG = {
     },
     sunday: null // Cerrado
   },
-  
+
   scheduleText: {
     weekdays: 'Lunes a Viernes: 10:00 a.m. – 2:00 p.m. y 4:00 – 8:00 p.m.',
     saturday: 'Sábado: 10:00 a.m. – 2:00 p.m. y 4:00 – 8:00 p.m.',

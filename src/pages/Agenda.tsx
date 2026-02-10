@@ -462,7 +462,7 @@ const Agenda = () => {
       patientName,
       date,
       time,
-      'Dr. Denttia',
+      'Doctor',
       appointment.title
     );
 

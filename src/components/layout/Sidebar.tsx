@@ -156,9 +156,9 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-ios-gray-900 tracking-tight">
-                Denttia
+                KlinikOS
               </h1>
-              <p className="text-xs text-ios-gray-500 font-medium">ERP Dental</p>
+              <p className="text-xs text-ios-gray-500 font-medium">Gestión Clínica</p>
             </div>
           </div>
         </div>

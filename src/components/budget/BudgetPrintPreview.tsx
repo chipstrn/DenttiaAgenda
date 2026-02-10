@@ -29,9 +29,8 @@ const BudgetPrintPreview: React.FC<BudgetPrintPreviewProps> = ({ budget, open, o
                             <p className="text-slate-500">Folio: {budget.id.slice(0, 8).toUpperCase()}</p>
                         </div>
                         <div className="text-right">
-                            <h2 className="text-xl font-bold text-slate-800">Denttia Clínica</h2>
-                            <p className="text-slate-500 text-sm">Av. Principal 123, Ciudad</p>
-                            <p className="text-slate-500 text-sm">Tel: (555) 123-4567</p>
+                            <h2 className="text-xl font-bold text-slate-800">Clínica Dental</h2>
+                            <p className="text-slate-500 text-sm">Presupuesto Profesional</p>
                         </div>
                     </div>
 

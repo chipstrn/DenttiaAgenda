@@ -13,7 +13,7 @@ export const TourGuide = () => {
         const agendaDriver = driver({
             showProgress: true,
             steps: [
-                { popover: { title: 'Bienvenido a Denttia', description: 'Te daremos un recorrido rápido por las funciones principales.' } },
+                { popover: { title: 'Bienvenido a KlinikOS', description: 'Te daremos un recorrido rápido por las funciones principales.' } },
                 { element: '.agenda-view', popover: { title: 'Tu Agenda', description: 'Aquí verás todas tus citas organizadas por día, semana o mes.' } },
                 { element: '.new-appointment-btn', popover: { title: 'Nueva Cita', description: 'Haz clic aquí para agendar una nueva cita rápidamente.' } },
                 { element: '.calendar-nav', popover: { title: 'Navegación', description: 'Cambia de fecha fácilmente usando este calendario.' } },
