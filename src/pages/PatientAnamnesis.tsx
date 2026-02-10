@@ -1,4 +1,3 @@
-```
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -144,11 +143,34 @@ const PatientAnamnesis = () => {
     const meds = formData.current_medications.toLowerCase();
     const foundDangerous = DANGEROUS_MEDICATIONS.find(med => meds.includes(med));
     if (foundDangerous) {
-      setMedicationAlert(`⚠️ ALERTA: Paciente toma ${ foundDangerous.toUpperCase() }. Riesgo de Osteonecrosis Mandibular.`);
+      setMedicationAlert(`⚠️ ALERTA: Paciente toma ${foundDangerous.toUpperCase()}. Riesgo de Osteonecrosis Mandibular.`);
     } else {
       setMedicationAlert(null);
     }
   }, [formData.current_medications]);
+
+  // Offline support: Load draft
+  useEffect(() => {
+    if (patientId) {
+      const saved = localStorage.getItem(`anamnesis_${patientId}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setFormData(prev => ({ ...prev, ...parsed }));
+          toast.info('Borrador recuperado de memoria local');
+        } catch (e) {
+          console.error('Error parsing draft', e);
+        }
+      }
+    }
+  }, [patientId]);
+
+  // Offline support: Save draft
+  useEffect(() => {
+    if (patientId) {
+      localStorage.setItem(`anamnesis_${patientId}`, JSON.stringify(formData));
+    }
+  }, [formData, patientId]);
 
   const fetchData = async () => {
     if (!patientId) {
@@ -175,26 +197,26 @@ const PatientAnamnesis = () => {
         .select('*')
         .eq('patient_id', patientId)
         .single();
-        
+
       if (recordData) {
-          setFormData({
-            has_allergies: recordData.has_allergies || false,
-            allergies: recordData.allergies || [],
-            allergy_notes: recordData.allergy_notes || '',
-            has_bleeding_issues: recordData.has_bleeding_issues || false,
-            takes_anticoagulants: recordData.takes_anticoagulants || false,
-            anticoagulant_details: recordData.anticoagulant_details || '',
-            has_chronic_diseases: recordData.has_chronic_diseases || false,
-            chronic_disease_details: recordData.chronic_disease_details || '',
-            is_chronic_controlled: recordData.is_chronic_controlled || false,
-            has_infectious_diseases: recordData.has_infectious_diseases || false,
-            infectious_disease_notes: recordData.infectious_disease_notes || '',
-            current_medications: recordData.current_medications || '',
-            last_dental_visit: recordData.last_dental_visit || '',
-            has_current_pain: recordData.has_current_pain || false,
-            pain_level: recordData.pain_level || 5,
-            brushing_frequency: recordData.brushing_frequency || 2
-          });
+        setFormData({
+          has_allergies: recordData.has_allergies || false,
+          allergies: recordData.allergies || [],
+          allergy_notes: recordData.allergy_notes || '',
+          has_bleeding_issues: recordData.has_bleeding_issues || false,
+          takes_anticoagulants: recordData.takes_anticoagulants || false,
+          anticoagulant_details: recordData.anticoagulant_details || '',
+          has_chronic_diseases: recordData.has_chronic_diseases || false,
+          chronic_disease_details: recordData.chronic_disease_details || '',
+          is_chronic_controlled: recordData.is_chronic_controlled || false,
+          has_infectious_diseases: recordData.has_infectious_diseases || false,
+          infectious_disease_notes: recordData.infectious_disease_notes || '',
+          current_medications: recordData.current_medications || '',
+          last_dental_visit: recordData.last_dental_visit || '',
+          has_current_pain: recordData.has_current_pain || false,
+          pain_level: recordData.pain_level || 5,
+          brushing_frequency: recordData.brushing_frequency || 2
+        });
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -217,36 +239,54 @@ const PatientAnamnesis = () => {
         .filter((t: any) => t.condition !== 'healthy')
         .map((t: any) => ({
           date: new Date().toISOString(),
-          description: `Diente ${ t.tooth_number }: ${ t.condition } ${ t.notes ? `(${t.notes})` : '' } `,
+          description: `Diente ${t.tooth_number}: ${t.condition} ${t.notes ? `(${t.notes})` : ''}`,
           status: 'Diagnóstico',
           doctor: 'N/A'
         }));
 
       const notes = (notesResult.data || []).map((n: any) => ({
         date: n.note_date,
-        author: n.profiles ? `${ n.profiles.first_name } ${ n.profiles.last_name } ` : 'Sistema',
+        author: n.profiles ? `${n.profiles.first_name} ${n.profiles.last_name}` : 'Sistema',
         content: n.note
       }));
 
-      generateClinicalHistoryPDF({
-        patientName: `${ patientData.first_name } ${ patientData.last_name } `,
+      const pdfData = {
+        patientName: `${patientData.first_name} ${patientData.last_name}`,
         dob: patientData.date_of_birth || 'No registrada',
         phone: patientData.phone || 'No registrado',
         email: patientData.email || 'No registrado',
         medicalHistory: {
-            conditions: [
-                formData.has_chronic_diseases ? `Crónicas: ${ formData.chronic_disease_details } ` : '',
-                formData.has_infectious_diseases ? `Infecciosas: ${ formData.infectious_disease_notes } ` : '',
-                formData.has_bleeding_issues ? `Coagulación: ${ formData.anticoagulant_details } ` : ''
-            ].filter(Boolean),
-            allergies: formData.allergies,
-            notes: `Medicamentos: ${ formData.current_medications } \nDolor actual: ${ formData.has_current_pain ? `Sí (Nivel ${formData.pain_level})` : 'No' } `
+          conditions: [
+            formData.has_chronic_diseases ? `Crónicas: ${formData.chronic_disease_details}` : '',
+            formData.has_infectious_diseases ? `Infecciosas: ${formData.infectious_disease_notes}` : '',
+            formData.has_bleeding_issues ? `Coagulación: ${formData.anticoagulant_details}` : ''
+          ].filter(Boolean),
+          allergies: formData.allergies,
+          notes: `Medicamentos: ${formData.current_medications}\nDolor actual: ${formData.has_current_pain ? `Sí (Nivel ${formData.pain_level})` : 'No'}`
         },
         treatments,
         notes
-      });
-      
-      toast.success('Historia Clínica descargada');
+      };
+
+      // Save Legal Snapshot
+      const { error: snapshotError } = await supabase
+        .from('clinical_history_snapshots')
+        .insert({
+          patient_id: patientId,
+          snapshot_type: 'anamnesis',
+          snapshot_data: pdfData,
+          metadata: { version: '1.0', generated_at: new Date().toISOString() }
+        });
+
+      if (snapshotError) {
+        console.error('Error saving legal snapshot:', snapshotError);
+        toast.error('Error de integridad legal. PDF no generado.');
+        return;
+      }
+
+      generateClinicalHistoryPDF(pdfData);
+
+      toast.success('Historia Clínica descargada y registrada legalmente');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Error al generar PDF');
@@ -263,8 +303,6 @@ const PatientAnamnesis = () => {
         : [...prev.allergies, allergy]
     }));
   };
-
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,6 +323,9 @@ const PatientAnamnesis = () => {
         .eq('patient_id', patientId);
 
       if (error) throw error;
+
+      // Clear local draft on success
+      localStorage.removeItem(`anamnesis_${patientId}`);
 
       toast.success('Expediente completado');
       navigate('/patients');
@@ -311,26 +352,26 @@ const PatientAnamnesis = () => {
       {/* Header */}
       <div className="mb-8 animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-            <div className="flex items-center gap-2 text-ios-gray-500 text-sm mb-2">
+          <div className="flex items-center gap-2 text-ios-gray-500 text-sm mb-2">
             <span>Expediente</span>
             <ChevronRight className="h-4 w-4" />
             <span className="text-ios-green font-medium">Doctor</span>
-            </div>
-            <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">
+          </div>
+          <h1 className="text-3xl font-bold text-ios-gray-900 tracking-tight">
             Anamnesis Dental
-            </h1>
-            <p className="text-ios-gray-500 mt-1 font-medium">
-            Paciente: <span className="text-ios-gray-900">{patientData ? `${ patientData.first_name } ${ patientData.last_name } ` : ''}</span>
-            </p>
+          </h1>
+          <p className="text-ios-gray-500 mt-1 font-medium">
+            Paciente: <span className="text-ios-gray-900">{patientData ? `${patientData.first_name} ${patientData.last_name}` : ''}</span>
+          </p>
         </div>
-        
+
         <button
-            onClick={handlePrintHistory}
-            disabled={generatingPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-ios-gray-200 rounded-xl text-ios-gray-700 font-medium hover:bg-ios-gray-50 transition-colors shadow-sm"
+          onClick={handlePrintHistory}
+          disabled={generatingPDF}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-ios-gray-200 rounded-xl text-ios-gray-700 font-medium hover:bg-ios-gray-50 transition-colors shadow-sm"
         >
-            {generatingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-            Imprimir Historia
+          {generatingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+          Imprimir Historia
         </button>
       </div>
 
@@ -627,31 +668,31 @@ const PatientAnamnesis = () => {
         <div className="flex gap-4 pt-6 pb-8 animate-slide-up" style={{ animationDelay: '450ms' }}>
           <button
             type="button"
-            onClick={() => navigate(`/ patient / ${ patientId }/intake`)}
-className = "flex-1 h-14 rounded-2xl bg-ios-gray-100 text-ios-gray-900 font-semibold text-lg hover:bg-ios-gray-200 transition-colors touch-feedback"
-  >
-  Volver a Recepción
-          </button >
-  <button
-    type="submit"
-    disabled={saving}
-    className="flex-1 h-14 rounded-2xl bg-ios-green text-white font-semibold text-lg hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
-  >
-    {saving ? (
-      <>
-        <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-        Guardando...
-      </>
-    ) : (
-      <>
-        <Check className="h-5 w-5" />
-        Completar Expediente
-      </>
-    )}
-  </button>
-        </div >
-      </form >
-    </MainLayout >
+            onClick={() => navigate(`/patient/${patientId}/intake`)}
+            className="flex-1 h-14 rounded-2xl bg-ios-gray-100 text-ios-gray-900 font-semibold text-lg hover:bg-ios-gray-200 transition-colors touch-feedback"
+          >
+            Volver a Recepción
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 h-14 rounded-2xl bg-ios-green text-white font-semibold text-lg hover:bg-ios-green/90 transition-colors touch-feedback disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <>
+                <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Guardando...
+              </>
+            ) : (
+              <>
+                <Check className="h-5 w-5" />
+                Completar Expediente
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </MainLayout>
   );
 };
 

@@ -64,7 +64,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
         setShowPrint(true);
     };
 
-    const handleConsentClick = (budget: Budget) => {
+    const handleConsentClick = async (budget: Budget) => {
         if (!budget) return;
 
         // Construct procedure name from items
@@ -80,14 +80,40 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
             ? `${(budget as any).patient.first_name} ${(budget as any).patient.last_name}`
             : 'Paciente';
 
-        generateInformedConsentPDF({
+        const pdfData = {
             patientName,
             doctorName,
             procedureName: procedures || 'Tratamiento Odontológico General',
             risks: '' // Use default generic risks
-        });
+        };
 
-        toast.success('Consentimiento Informado generado');
+        try {
+            // Save Legal Snapshot
+            const { error: snapshotError } = await supabase
+                .from('clinical_history_snapshots')
+                .insert({
+                    patient_id: patientId,
+                    snapshot_type: 'informed_consent',
+                    snapshot_data: pdfData,
+                    metadata: {
+                        budget_id: budget.id,
+                        version: '1.0',
+                        generated_at: new Date().toISOString()
+                    }
+                });
+
+            if (snapshotError) {
+                console.error('Error saving legal snapshot:', snapshotError);
+                toast.error('Error de integridad legal. PDF no generado.');
+                return;
+            }
+
+            generateInformedConsentPDF(pdfData);
+            toast.success('Consentimiento Informado generado y registrado');
+        } catch (error) {
+            console.error('Error generating consent:', error);
+            toast.error('Error al generar consentimiento');
+        }
     };
 
     const getStatusColor = (status: string) => {
