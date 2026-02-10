@@ -4,13 +4,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import AdminDashboard from "./pages/admin/Dashboard";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
 import PatientIntake from "./pages/PatientIntake";
 import PatientAnamnesis from "./pages/PatientAnamnesis";
 import PatientExam from "./pages/PatientExam";
-
 import Agenda from "./pages/Agenda";
 import Treatments from "./pages/Treatments";
 import Doctors from "./pages/Doctors";
@@ -51,6 +51,13 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+
+            {/* Super Admin Route */}
+            <Route path="/admin/*" element={
+              <ProtectedRoute allowedRoles={['super_admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
 
             <Route path="/" element={
               <ProtectedRoute>

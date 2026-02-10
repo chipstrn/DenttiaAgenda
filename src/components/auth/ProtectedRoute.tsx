@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { session, profile, loading, isAdmin } = useAuth();
+  const { session, profile, loading, isAdmin, isSuperAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -27,6 +27,11 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
+  // Super Admin bypasses all role checks
+  if (isSuperAdmin) {
+    return <>{children}</>;
+  }
+
   // Verificar roles si se especificaron
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = profile?.role || 'doctor';
@@ -41,6 +46,6 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
 
 // Hook para obtener el perfil del usuario actual (ahora usa el contexto)
 export const useUserProfile = () => {
-  const { profile, loading, isAdmin, isRecepcion } = useAuth();
-  return { profile, loading, isAdmin, isRecepcion };
+  const { profile, loading, isAdmin, isRecepcion, isSuperAdmin } = useAuth();
+  return { profile, loading, isAdmin, isRecepcion, isSuperAdmin };
 };

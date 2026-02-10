@@ -13,6 +13,10 @@ interface UserProfile {
   must_change_password: boolean;
   last_login: string | null;
   clinic_id: string | null;
+  is_super_admin: boolean;
+  clinics?: {
+    active: boolean;
+  } | null;
 }
 
 interface AuthContextType {
@@ -23,6 +27,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isRecepcion: boolean;
   isDoctor: boolean;
+  isSuperAdmin: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -52,9 +57,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role, is_active, must_change_password, last_login, clinic_id')
+        .select('id, first_name, last_name, role, is_active, must_change_password, last_login, clinic_id, is_super_admin, clinics(active)')
         .eq('id', userId)
         .single();
+
 
       if (error) {
         console.error('Error fetching profile:', error);
@@ -126,6 +132,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!initialized) return;
 
+    if (profile && !profile.is_super_admin && profile.clinics && profile.clinics.active === false) {
+      // Clinic is suspended
+      console.warn('Clinic is suspended. Logging out.');
+      // Import toast dynamically or assuming it's available. 
+      // We can't use 'toast' here if not imported.
+      // But standard logout is fine.
+      signOut();
+      // Optionally redirect to a "Suspended" page?
+      // Since we sign out, they go to login.
+    }
+  }, [profile, initialized, signOut]);
+
+  useEffect(() => {
+    if (!initialized) return;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         console.log('Auth state changed:', event);
@@ -155,6 +176,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const isAdmin = useMemo(() => profile?.role === 'admin', [profile?.role]);
   const isRecepcion = useMemo(() => profile?.role === 'recepcion', [profile?.role]);
   const isDoctor = useMemo(() => profile?.role === 'doctor', [profile?.role]);
+  const isSuperAdmin = useMemo(() => profile?.is_super_admin || false, [profile?.is_super_admin]);
 
   const value = useMemo(() => ({
     session,
@@ -164,9 +186,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdmin,
     isRecepcion,
     isDoctor,
+    isSuperAdmin,
     signOut,
     refreshProfile,
-  }), [session, user, profile, loading, isAdmin, isRecepcion, isDoctor, signOut, refreshProfile]);
+  }), [session, user, profile, loading, isAdmin, isRecepcion, isDoctor, isSuperAdmin, signOut, refreshProfile]);
 
   return (
     <AuthContext.Provider value={value}>
