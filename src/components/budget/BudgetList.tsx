@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Printer } from 'lucide-react';
+import { Printer, FileSignature } from 'lucide-react';
 import { toast } from 'sonner';
 import BudgetPrintPreview from './BudgetPrintPreview';
+import { generateInformedConsentPDF } from '@/utils/pdfGenerator';
 
 interface BudgetListProps {
     patientId: string;
@@ -31,6 +32,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
                     .select(`
             *,
             doctor:doctors(first_name, last_name, color_code),
+            patient:patients(first_name, last_name),
             items:budget_items(
               tooth_number,
               price,
@@ -43,9 +45,6 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
 
                 if (error) throw error;
 
-                // Map the deep nested structure if needed, or just let it pass if types align loosely.
-                // We might need to transform `treatment: { name }` to `treatment_name` for consistency 
-                // if using the exact BudgetItem type, but for PrintPreview we can handle it.
                 setBudgets(data as any || []);
             } catch (error) {
                 console.error('Error fetching budgets:', error);
@@ -63,6 +62,32 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
     const handlePrintClick = (budget: Budget) => {
         setSelectedBudget(budget);
         setShowPrint(true);
+    };
+
+    const handleConsentClick = (budget: Budget) => {
+        if (!budget) return;
+
+        // Construct procedure name from items
+        const procedures = (budget.items || [])
+            .map((item: any) => item.treatment?.name || item.description)
+            .join(', ');
+
+        const doctorName = (budget.doctor as any)?.first_name
+            ? `${(budget.doctor as any).first_name} ${(budget.doctor as any).last_name}`
+            : 'Denttia Clinic';
+
+        const patientName = (budget as any).patient
+            ? `${(budget as any).patient.first_name} ${(budget as any).patient.last_name}`
+            : 'Paciente';
+
+        generateInformedConsentPDF({
+            patientName,
+            doctorName,
+            procedureName: procedures || 'Tratamiento Odontológico General',
+            risks: '' // Use default generic risks
+        });
+
+        toast.success('Consentimiento Informado generado');
     };
 
     const getStatusColor = (status: string) => {
@@ -138,6 +163,9 @@ const BudgetList: React.FC<BudgetListProps> = ({ patientId, refreshTrigger }) =>
                             </div>
 
                             <div className="flex gap-2">
+                                <Button variant="outline" size="sm" onClick={() => handleConsentClick(budget)} className="h-9 hover:bg-slate-50 text-slate-600">
+                                    <FileSignature className="mr-2 h-3.5 w-3.5" /> Consentimiento
+                                </Button>
                                 <Button variant="outline" size="sm" onClick={() => handlePrintClick(budget)} className="h-9 hover:bg-slate-50">
                                     <Printer className="mr-2 h-3.5 w-3.5" /> Imprimir
                                 </Button>

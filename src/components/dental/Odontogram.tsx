@@ -2,6 +2,18 @@
 
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { History, Clock, ArrowLeft, Loader2, Eye, Calendar } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface ToothData {
   tooth_number: number;
@@ -22,6 +34,7 @@ interface OdontogramProps {
   onToothClick: (toothNumber: number) => void;
   selectedTooth: number | null;
   readOnly?: boolean;
+  patientId?: string;
 }
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -178,8 +191,39 @@ const Tooth = ({
   );
 };
 
-const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: OdontogramProps) => {
+const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false, patientId }: OdontogramProps) => {
   const [showMixedDentition, setShowMixedDentition] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [viewingSnapshot, setViewingSnapshot] = useState<any | null>(null);
+
+  const fetchSnapshots = async () => {
+    if (!patientId) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('odontogram_snapshots')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSnapshots(data || []);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleOpenHistory = () => {
+    setHistoryOpen(true);
+    fetchSnapshots();
+  };
+
+  const activeTeeth = viewingSnapshot ? (viewingSnapshot.state as Record<number, ToothData>) : teeth;
+  const isHistoryMode = !!viewingSnapshot;
 
   const renderToothRow = (toothArray: number[], isUpper: boolean) => (
     <div className={cn("flex gap-1", isUpper ? "items-end" : "items-start")}>
@@ -187,9 +231,9 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: Od
         <Tooth
           key={num}
           number={num}
-          data={teeth[num]}
-          onClick={() => !readOnly && onToothClick(num)}
-          isSelected={selectedTooth === num}
+          data={activeTeeth[num]}
+          onClick={() => !readOnly && !isHistoryMode && onToothClick(num)}
+          isSelected={selectedTooth === num && !isHistoryMode}
           isUpper={isUpper}
         />
       ))}
@@ -197,9 +241,33 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: Od
   );
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+      {/* History Overlay Banner */}
+      {isHistoryMode && (
+        <div className="absolute top-0 left-0 right-0 z-10 bg-ios-yellow/90 backdrop-blur-sm p-3 rounded-t-2xl flex items-center justify-between text-yellow-900 border-b border-yellow-200 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            <span className="text-sm font-medium">
+              Viendo historial del {format(new Date(viewingSnapshot.created_at), "d MMMM yyyy, HH:mm", { locale: es })}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 hover:bg-yellow-200/50 text-yellow-900"
+            onClick={() => setViewingSnapshot(null)}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Volver al Actual
+          </Button>
+        </div>
+      )}
+
       {/* Legend & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 bg-ios-gray-50 rounded-2xl">
+      <div className={cn(
+        "flex flex-wrap items-center justify-between gap-4 mb-6 p-4 bg-ios-gray-50 rounded-2xl transition-all",
+        isHistoryMode && "mt-12 opacity-50 pointer-events-none"
+      )}>
         <div className="flex flex-wrap gap-3">
           {Object.entries(CONDITION_LABELS).map(([key, label]) => (
             <div key={key} className="flex items-center gap-2">
@@ -211,18 +279,33 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: Od
             </div>
           ))}
         </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showMixedDentition}
-            onChange={(e) => setShowMixedDentition(e.target.checked)}
-            className="rounded border-gray-300 text-ios-blue focus:ring-ios-blue"
-          />
-          <span className="text-xs font-medium text-ios-gray-700">Dentición Mixta (Infantil)</span>
-        </label>
+
+        <div className="flex items-center gap-4">
+          {patientId && !readOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-2 text-ios-gray-600 hover:text-ios-blue hover:border-ios-blue"
+              onClick={handleOpenHistory}
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">Historial</span>
+            </Button>
+          )}
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showMixedDentition}
+              onChange={(e) => setShowMixedDentition(e.target.checked)}
+              className="rounded border-gray-300 text-ios-blue focus:ring-ios-blue"
+            />
+            <span className="text-xs font-medium text-ios-gray-700">Dentición Mixta (Infantil)</span>
+          </label>
+        </div>
       </div>
 
-      <div className="relative overflow-x-auto pb-4">
+      <div className={cn("relative overflow-x-auto pb-4 transition-opacity", isHistoryMode && "opacity-90")}>
         <div className="min-w-[600px] flex flex-col items-center">
 
           {/* Upper Arch */}
@@ -243,7 +326,7 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: Od
             <div className="mb-4 animate-fade-in">
               <div className="text-[10px] text-ios-blue/70 text-center mb-1 font-bold tracking-widest">TEMPORAL SUPERIOR</div>
               <div className="flex justify-center gap-8">
-                <div className="flex gap-1 pr-2 border-r border-blue-100">
+                <div className="flex gap-1 pr-2 border-blue-100 border-r">
                   {renderToothRow(UPPER_RIGHT_DECIDUOUS, true)}
                 </div>
                 <div className="flex gap-1 pl-2">
@@ -286,6 +369,66 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false }: Od
 
         </div>
       </div>
+
+      {/* History Dialog */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-ios-blue" />
+              Historial de Cambios
+            </DialogTitle>
+          </DialogHeader>
+
+          <ScrollArea className="h-[300px] mt-2 pr-4">
+            {loadingHistory ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-ios-blue" />
+              </div>
+            ) : snapshots.length === 0 ? (
+              <div className="text-center py-8 text-ios-gray-400 text-sm">
+                No hay registros históricos disponibles.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {snapshots.map((snap) => (
+                  <div
+                    key={snap.id}
+                    className="p-3 rounded-xl border border-ios-gray-100 hover:border-ios-blue/30 hover:bg-ios-blue/5 cursor-pointer transition-all group"
+                    onClick={() => {
+                      setViewingSnapshot(snap);
+                      setHistoryOpen(false);
+                    }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-ios-gray-100 flex items-center justify-center text-ios-gray-500 group-hover:bg-ios-blue group-hover:text-white transition-colors">
+                          <Calendar className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-ios-gray-900">
+                            {format(new Date(snap.created_at), "d MMMM yyyy", { locale: es })}
+                          </p>
+                          <p className="text-xs text-ios-gray-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {format(new Date(snap.created_at), "HH:mm", { locale: es })}
+                          </p>
+                        </div>
+                      </div>
+                      <Eye className="w-4 h-4 text-ios-gray-300 group-hover:text-ios-blue" />
+                    </div>
+                    {snap.notes && (
+                      <p className="mt-2 text-xs text-ios-gray-600 pl-10 border-l-2 border-ios-gray-200 ml-4 py-1">
+                        {snap.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
