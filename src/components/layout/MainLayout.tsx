@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Sidebar from './Sidebar';
-import { Bell, Plus, Menu } from 'lucide-react';
+import { Bell, Plus, Menu, WifiOff } from 'lucide-react';
 import GlobalSearch from './GlobalSearch';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -25,14 +25,25 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10);
     };
 
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const displayName = useMemo(() => {
@@ -62,6 +73,14 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       <div className="pl-0 md:pl-72 flex flex-col min-h-screen transition-all duration-300">
+        {/* Offline Banner */}
+        {!isOnline && (
+          <div className="bg-ios-red text-white px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium animate-slide-down sticky top-0 z-50">
+            <WifiOff className="h-4 w-4" />
+            <span>Sin conexión a internet. Trabajando en modo sin conexión.</span>
+          </div>
+        )}
+
         {/* Glass Header */}
         <header className={cn(
           "h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-20 transition-all duration-300 ease-ios",

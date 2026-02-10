@@ -22,6 +22,7 @@ import BudgetCreator from '@/components/budget/BudgetCreator';
 import BudgetList from '@/components/budget/BudgetList';
 import { supabase } from '@/integrations/supabase/client';
 import {
+
   ChevronRight,
   Save,
   FileText,
@@ -32,7 +33,8 @@ import {
   Loader2,
   Calendar,
   User,
-  Clock
+  Clock,
+  Camera
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -99,6 +101,7 @@ const PatientExam = () => {
   const [savingAll, setSavingAll] = useState(false);
   const [patientName, setPatientName] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
+  const [clinicId, setClinicId] = useState<string | null>(null);
   const [teeth, setTeeth] = useState<Record<number, ToothData>>({});
   const [modifiedTeeth, setModifiedTeeth] = useState<Set<number>>(new Set());
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
@@ -150,6 +153,15 @@ const PatientExam = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
+
+      // Fetch profile for clinic_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) setClinicId(profile.clinic_id);
 
       // Fetch patient and odontogram in parallel
       const [patientResult, odontogramResult, treatmentsResult, doctorsResult] = await Promise.all([
@@ -384,6 +396,38 @@ const PatientExam = () => {
       toast.error('Error al eliminar nota');
     } finally {
       setDeletingNote(null);
+    }
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!patientId || !userId) return;
+
+    const toastId = toast.loading('Guardando punto de restauración...');
+    try {
+      const snapshotData = {
+        state: teeth,
+        version: '1.0',
+        timestamp: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('clinical_history_snapshots')
+        .insert({
+          patient_id: patientId,
+          clinic_id: clinicId,
+          snapshot_type: 'odontogram',
+          snapshot_data: snapshotData,
+          metadata: {
+            created_by: userId,
+            note: 'Manual Snapshot'
+          }
+        });
+
+      if (error) throw error;
+      toast.success('Estado guardado en historial', { id: toastId });
+    } catch (error) {
+      console.error('Error saving snapshot:', error);
+      toast.error('Error al guardar historial', { id: toastId });
     }
   };
 
@@ -664,7 +708,18 @@ Total: $${total}
               Paciente: <span className="text-ios-gray-900">{patientName}</span>
             </p>
           </div>
-          {/* Legacy buttons removed - teeth auto-save, new workflow uses integrated panel */}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveSnapshot}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-ios-gray-700 rounded-xl border border-ios-gray-200 hover:bg-ios-gray-50 hover:border-ios-gray-300 transition-all shadow-sm font-medium text-sm"
+              title="Guardar punto de restauración en el historial"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Guardar Snapshot</span>
+            </button>
+            {/* Legacy buttons removed - teeth auto-save, new workflow uses integrated panel */}
+          </div>
         </div>
       </div>
 
@@ -1146,7 +1201,7 @@ Total: $${total}
           </div>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </MainLayout >
   );
 };
 

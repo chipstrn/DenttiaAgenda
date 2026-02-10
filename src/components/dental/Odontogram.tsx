@@ -203,9 +203,10 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false, pati
     setLoadingHistory(true);
     try {
       const { data, error } = await supabase
-        .from('odontogram_snapshots')
+        .from('clinical_history_snapshots')
         .select('*')
         .eq('patient_id', patientId)
+        .eq('snapshot_type', 'odontogram')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -222,7 +223,7 @@ const Odontogram = ({ teeth, onToothClick, selectedTooth, readOnly = false, pati
     fetchSnapshots();
   };
 
-  const activeTeeth = viewingSnapshot ? (viewingSnapshot.state as Record<number, ToothData>) : teeth;
+  const activeTeeth = viewingSnapshot ? (viewingSnapshot.snapshot_data?.state as Record<number, ToothData>) : teeth;
   const isHistoryMode = !!viewingSnapshot;
 
   const renderToothRow = (toothArray: number[], isUpper: boolean) => (
