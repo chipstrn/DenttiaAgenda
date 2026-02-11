@@ -55,19 +55,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
     try {
+      // First, get profile without joining clinics (to avoid issues with super admin who has clinic_id = NULL)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role, is_active, must_change_password, last_login, clinic_id, is_super_admin, clinics(active)')
+        .select('id, first_name, last_name, role, is_active, must_change_password, last_login, clinic_id, is_super_admin')
         .eq('id', userId)
         .single();
-
 
       if (error) {
         console.error('Error fetching profile:', error);
         return null;
       }
 
-      return data as UserProfile;
+      // If not super admin and has clinic_id, fetch clinic status
+      if (!data.is_super_admin && data.clinic_id) {
+        const { data: clinicData } = await supabase
+          .from('clinics')
+          .select('active')
+          .eq('id', data.clinic_id)
+          .single();
+
+        return {
+          ...data,
+          clinics: clinicData || null
+        } as UserProfile;
+      }
+
+      // Super admin or no clinic - return profile without clinic data
+      return {
+        ...data,
+        clinics: null
+      } as UserProfile;
     } catch (error) {
       console.error('Error in fetchProfile:', error);
       return null;

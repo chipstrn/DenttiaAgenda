@@ -17,6 +17,7 @@ import {
   Calculator,
   Shield,
   Box,
+  Package,
   TrendingUp,
   BarChart3,
   DollarSign
@@ -74,9 +75,10 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { icon: Settings, label: 'Configuración', path: '/settings', color: 'bg-ios-gray-500' },
   ], []);
 
-  // Menú de inventario - visible para todos (o restringir según lógica de negocio, plan dice todos con acceso a recepción/admin)
+  // Menú de inventario - con submenús
   const inventoryMenuItems = useMemo(() => [
-    { icon: Box, label: 'Inventario', path: '/inventory', color: 'bg-ios-orange' },
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/inventory', color: 'bg-ios-orange' },
+    { icon: Package, label: 'Catálogo', path: '/inventory/catalog', color: 'bg-ios-orange' },
   ], []);
 
   const handleLogout = useCallback(async () => {
@@ -169,9 +171,9 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             <p className="text-sm font-medium text-ios-gray-900 truncate">{userName}</p>
             <p className={cn(
               "text-xs font-medium mt-0.5",
-              isAdmin ? 'text-ios-red' : isRecepcion ? 'text-ios-blue' : 'text-ios-green'
+              profile?.is_super_admin ? 'text-ios-red-600 font-semibold' : isAdmin ? 'text-ios-red' : isRecepcion ? 'text-ios-blue' : 'text-ios-green'
             )}>
-              {isAdmin ? 'Administrador' : isRecepcion ? 'Recepción' : 'Doctor'}
+              {profile?.is_super_admin ? 'Platform Super Admin' : isAdmin ? 'Administrador' : isRecepcion ? 'Recepción' : 'Doctor'}
             </p>
           </div>
         </div>

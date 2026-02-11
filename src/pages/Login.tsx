@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { session, loading: authLoading } = useAuth();
+  const { session, profile, loading: authLoading, isSuperAdmin } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -17,10 +17,10 @@ const Login = () => {
 
   useEffect(() => {
     // Redirect if already logged in
-    if (!authLoading && session) {
-      navigate('/', { replace: true });
+    if (!authLoading && session && profile) {
+      navigate(isSuperAdmin ? '/admin' : '/', { replace: true });
     }
-  }, [session, authLoading, navigate]);
+  }, [session, profile, authLoading, isSuperAdmin, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +51,7 @@ const Login = () => {
       }
 
       toast.success('Bienvenido');
-      navigate('/', { replace: true });
+      // Navigation handled by useEffect when session + profile update
     } catch (error: any) {
       toast.error('Error al iniciar sesión');
     } finally {

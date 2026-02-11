@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AdminDashboard from "./pages/admin/Dashboard";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
@@ -21,6 +21,8 @@ import CashRegisterClose from "./pages/CashRegisterClose";
 import StaffManagement from "./pages/StaffManagement";
 import DoctorCommissions from "./pages/DoctorCommissions";
 import Inventory from './pages/Inventory';
+import InventoryDashboard from './pages/inventory/Dashboard';
+import InventoryCatalog from './pages/inventory/Catalog';
 import ImportWizard from './pages/ImportWizard';
 import Reports from "./pages/Reports";
 import ReceptionFinance from "./pages/ReceptionFinance";
@@ -41,14 +43,23 @@ const queryClient = new QueryClient({
   },
 });
 
+// Smart root redirect: Super admin goes to /admin, clinic users go to Dashboard
+const RootRedirect = () => {
+  const { isSuperAdmin } = useAuth();
+  if (isSuperAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+  return <Dashboard />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <TourGuide />
         <BrowserRouter>
+          <TourGuide />
           <Routes>
             <Route path="/login" element={<Login />} />
 
@@ -61,7 +72,7 @@ const App = () => (
 
             <Route path="/" element={
               <ProtectedRoute>
-                <Dashboard />
+                <RootRedirect />
               </ProtectedRoute>
             } />
 
@@ -137,7 +148,13 @@ const App = () => (
 
             <Route path="/inventory" element={
               <ProtectedRoute allowedRoles={['admin', 'recepcion', 'doctor']}>
-                <Inventory />
+                <InventoryDashboard />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/inventory/catalog" element={
+              <ProtectedRoute allowedRoles={['admin', 'recepcion']}>
+                <InventoryCatalog />
               </ProtectedRoute>
             } />
 
@@ -199,7 +216,7 @@ const App = () => (
               }
             />
 
-            <Route path="/" element={<Navigate to="/agenda" replace />} />
+
 
             <Route path="*" element={<NotFound />} />
           </Routes>
